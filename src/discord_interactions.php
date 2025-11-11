@@ -33,7 +33,7 @@ if ($type === 2) {
             discord_json_response([
                 'type' => 4,
                 'data' => [
-                    'content' => "❌ Checkpoint #{$active['id']} is already active. Use /end to close it first."
+                    'content' => "Yo! Checkpoint **#{$active['id']}** is still running. Hit /end first to wrap it up!"
                 ]
             ]);
         }
@@ -50,7 +50,7 @@ if ($type === 2) {
         discord_json_response([
             'type' => 4,
             'data' => [
-                'content' => "✅ Checkpoint **#{$id}** started. All images from now will be tracked."
+                'content' => "Checkpoint **#{$id}** is live! Drop those receipts and I'll track 'em all"
             ]
         ]);
     }
@@ -64,7 +64,7 @@ if ($type === 2) {
         if (!$active) {
             discord_json_response([
                 'type' => 4,
-                'data' => ['content' => "❌ No active checkpoint. Use /start to begin one."]
+                'data' => ['content' => "No checkpoint running yet! Use /start to kick things off."]
             ]);
         }
 
@@ -84,28 +84,28 @@ if ($type === 2) {
         $summary = summarize_checkpoint($db, $active['id']);
 
         if (!$summary) {
-            $msg = "📊 Checkpoint #{$active['id']} closed.\nNo receipts recorded.";
+            $msg = "Checkpoint **#{$active['id']}** closed.\nNo receipts? Y'all must've eaten air!";
         } else {
             $lines = [];
             $grand = 0;
             
             // Add detailed items
-            $lines[] = "**Receipts:**";
+            $lines[] = "**Receipt Breakdown:**";
             foreach ($receipts as $idx => $receipt) {
                 $num = $idx + 1;
                 $amt = number_format($receipt['amount'], 0, ',', '.');
                 $lines[] = "{$num}. {$receipt['user_name']}: Rp{$amt}";
             }
             
-            $lines[] = "\n**Summary by User:**";
+            $lines[] = "\n**Who Spent What:**";
             foreach ($summary as $row) {
                 $grand += $row['total'];
                 $lines[] = "- **{$row['user_name']}**: Rp" . number_format($row['total'], 0, ',', '.');
             }
             
-            $msg = "📊 Checkpoint #{$active['id']} closed.\n"
+            $msg = "Checkpoint **#{$active['id']}** closed!\n"
                  . implode("\n", $lines)
-                 . "\n\n**Total**: Rp" . number_format($grand, 0, ',', '.');
+                 . "\n\n**Grand Total**: Rp" . number_format($grand, 0, ',', '.');
         }
 
         discord_json_response([
@@ -123,7 +123,7 @@ if ($type === 2) {
         if (!$active) {
             discord_json_response([
                 'type' => 4,
-                'data' => ['content' => "❌ No active checkpoint. Use /start to begin one."]
+                'data' => ['content' => "No checkpoint running yet! Use /start to kick things off."]
             ]);
         }
 
@@ -140,28 +140,28 @@ if ($type === 2) {
         $summary = summarize_checkpoint($db, $active['id']);
 
         if (!$summary) {
-            $msg = "📊 Checkpoint #{$active['id']} (active)\nNo receipts recorded yet.";
+            $msg = "Checkpoint **#{$active['id']}** (still running)\nNo receipts yet. Time to go shopping?";
         } else {
             $lines = [];
             $grand = 0;
             
             // Add detailed items
-            $lines[] = "**Receipts:**";
+            $lines[] = "**Receipt Breakdown:**";
             foreach ($receipts as $idx => $receipt) {
                 $num = $idx + 1;
                 $amt = number_format($receipt['amount'], 0, ',', '.');
                 $lines[] = "{$num}. {$receipt['user_name']}: Rp{$amt}";
             }
             
-            $lines[] = "\n**Summary by User:**";
+            $lines[] = "\n**Who Spent What:**";
             foreach ($summary as $row) {
                 $grand += $row['total'];
                 $lines[] = "- **{$row['user_name']}**: Rp" . number_format($row['total'], 0, ',', '.');
             }
             
-            $msg = "📊 Checkpoint #{$active['id']} (active)\n"
+            $msg = "Checkpoint **#{$active['id']}** (still running)\n"
                  . implode("\n", $lines)
-                 . "\n\n**Total**: Rp" . number_format($grand, 0, ',', '.');
+                 . "\n\n**Running Total**: Rp" . number_format($grand, 0, ',', '.');
         }
 
         discord_json_response([
@@ -176,7 +176,7 @@ if ($type === 2) {
         if (!$latest) {
             discord_json_response([
                 'type' => 4,
-                'data' => ['content' => "❌ No checkpoint to undo."]
+                'data' => ['content' => "Nothing to undo here, chief!"]
             ]);
         }
 
@@ -190,14 +190,14 @@ if ($type === 2) {
 
         discord_json_response([
             'type' => 4,
-            'data' => ['content' => "🕓 Checkpoint #{$latest['id']} undone."]
+            'data' => ['content' => "Checkpoint **#{$latest['id']}** undone. Like it never happened!"]
         ]);
     }
 
     // Fallback
     discord_json_response([
         'type' => 4,
-        'data' => ['content' => 'Unknown command.']
+        'data' => ['content' => "Hmm, I don't know that command..."]
     ]);
 }
 
