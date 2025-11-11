@@ -24,6 +24,9 @@ if ($type === 2) {
     $name    = $interaction['data']['name'] ?? '';
     $channel = $interaction['channel_id'] ?? DISCORD_CHANNEL_ID;
     $db      = get_db();
+    
+    // Debug logging
+    error_log("Discord Command: {$name}, Channel: {$channel}, Interaction: " . json_encode($interaction));
 
     // /start - Start a new checkpoint
     if ($name === 'start') {

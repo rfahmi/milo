@@ -193,13 +193,16 @@ function get_total_from_receipt_gemini($imageUrl) {
 // DB helpers
 
 function get_active_checkpoint($db, $channelId) {
+    error_log("get_active_checkpoint called with channel: {$channelId}");
     $stmt = $db->prepare("SELECT * FROM checkpoints WHERE channel_id = :c AND closed_at IS NULL ORDER BY id DESC LIMIT 1");
     $stmt->execute([':c' => $channelId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    error_log("get_active_checkpoint result: " . json_encode($row));
     return $row ?: null;
 }
 
 function create_checkpoint($db, $channelId, $startMessageId) {
+    error_log("create_checkpoint called with channel: {$channelId}, message: {$startMessageId}");
     $stmt = $db->prepare("
         INSERT INTO checkpoints (channel_id, created_at, start_message_id)
         VALUES (:c, :created_at, :start_msg)
@@ -209,7 +212,9 @@ function create_checkpoint($db, $channelId, $startMessageId) {
         ':created_at' => date('c'),
         ':start_msg'  => $startMessageId
     ]);
-    return $db->lastInsertId();
+    $id = $db->lastInsertId();
+    error_log("create_checkpoint created ID: {$id}");
+    return $id;
 }
 
 function close_checkpoint($db, $checkpointId, $endMessageId) {
