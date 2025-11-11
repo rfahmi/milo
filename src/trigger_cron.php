@@ -63,6 +63,8 @@ $messages = array_reverse($messages); // oldest first
 $newLast = $state['last_message_id'] ?? null;
 $processedCount = 0;
 $receiptsAdded = 0;
+$errors = [];
+$debugInfo = [];
 
 foreach ($messages as $msg) {
     $msgId = $msg['id'];
@@ -71,13 +73,20 @@ foreach ($messages as $msg) {
     // Check if we have an active checkpoint
     $active = get_active_checkpoint($db, $channelId);
     if (!$active) {
+        $debugInfo[] = "Message {$msgId}: No active checkpoint";
         continue;
     }
 
     // Look for image attachments
     $attachments = $msg['attachments'] ?? [];
+    $debugInfo[] = "Message {$msgId}: " . count($attachments) . " attachments found";
+    
     foreach ($attachments as $att) {
-        if (!str_starts_with($att['content_type'] ?? '', 'image/')) {
+        $contentType = $att['content_type'] ?? 'unknown';
+        $debugInfo[] = "  - Attachment type: {$contentType}";
+        
+        if (!str_starts_with($contentType, 'image/')) {
+            $debugInfo[] = "    Skipped: not an image";
             continue;
         }
 
@@ -85,31 +94,53 @@ foreach ($messages as $msg) {
         $userId = $msg['author']['id'] ?? 'unknown';
         $userName = $msg['author']['username'] ?? 'Unknown';
 
+        $debugInfo[] = "    Processing image for user: {$userName}";
+        $debugInfo[] = "    Image URL: {$imageUrl}";
+
         // Ask Gemini to extract total
         try {
             $amount = get_total_from_receipt_gemini($imageUrl);
+            $debugInfo[] = "    Gemini extracted amount: {$amount}";
         } catch (Exception $e) {
             // Log error but continue processing other images
-            error_log("Failed to extract total from {$imageUrl}: " . $e->getMessage());
+            $errorMsg = $e->getMessage();
+            $errors[] = [
+                'message_id' => $msgId,
+                'user' => $userName,
+                'image_url' => $imageUrl,
+                'error' => $errorMsg
+            ];
+            $debugInfo[] = "    ERROR: {$errorMsg}";
+            error_log("Failed to extract total from {$imageUrl}: {$errorMsg}");
             continue;
         }
 
         // Insert receipt
-        $stmt = $db->prepare("
-            INSERT INTO receipts (checkpoint_id, user_id, user_name, channel_id, message_id, image_url, amount, created_at)
-            VALUES (:cid, :uid, :uname, :ch, :mid, :img, :amt, :created)
-        ");
-        $stmt->execute([
-            ':cid' => $active['id'],
-            ':uid' => $userId,
-            ':uname' => $userName,
-            ':ch' => $channelId,
-            ':mid' => $msgId,
-            ':img' => $imageUrl,
-            ':amt' => $amount,
-            ':created' => date('c')
-        ]);
-        $receiptsAdded++;
+        try {
+            $stmt = $db->prepare("
+                INSERT INTO receipts (checkpoint_id, user_id, user_name, channel_id, message_id, image_url, amount, created_at)
+                VALUES (:cid, :uid, :uname, :ch, :mid, :img, :amt, :created)
+            ");
+            $stmt->execute([
+                ':cid' => $active['id'],
+                ':uid' => $userId,
+                ':uname' => $userName,
+                ':ch' => $channelId,
+                ':mid' => $msgId,
+                ':img' => $imageUrl,
+                ':amt' => $amount,
+                ':created' => date('c')
+            ]);
+            $receiptsAdded++;
+            $debugInfo[] = "    Receipt saved successfully! Receipt ID: " . $db->lastInsertId();
+        } catch (Exception $e) {
+            $errors[] = [
+                'message_id' => $msgId,
+                'user' => $userName,
+                'error' => 'Database error: ' . $e->getMessage()
+            ];
+            $debugInfo[] = "    DB ERROR: " . $e->getMessage();
+        }
     }
     $processedCount++;
 }
@@ -125,5 +156,8 @@ echo json_encode([
     'message' => 'Cron job executed',
     'processed' => $processedCount,
     'receipts_added' => $receiptsAdded,
+    'active_checkpoint' => $active['id'] ?? null,
+    'errors' => $errors,
+    'debug' => $debugInfo,
     'timestamp' => date('c')
-]);
+], JSON_PRETTY_PRINT);
