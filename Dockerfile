@@ -1,40 +1,35 @@
-FROM php:8.2-apache
+# Use an official Node runtime as a parent image
+FROM node:20-slim
 
-# Install SQLite and PostgreSQL dependencies
+# Install system dependencies required by pg and sqlite3 as well as cron.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libsqlite3-dev \
         libpq-dev \
         postgresql-client \
         cron \
-    && docker-php-ext-configure pgsql -with-pgsql=/usr/local/pgsql \
-    && docker-php-ext-install pdo pdo_sqlite pgsql pdo_pgsql \
     && rm -rf /var/lib/apt/lists/*
 
-# Verify PostgreSQL extension is loaded
-RUN php -m | grep -i pdo_pgsql || (echo "ERROR: pdo_pgsql not installed" && exit 1)
+# Create app directory
+WORKDIR /usr/src/app
 
-# Enable Apache mod_rewrite just in case
-RUN a2enmod rewrite
+# Copy package.json and package-lock.json if present
+COPY package*.json ./
 
-# Set ServerName to suppress warning
-RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+# Install only production dependencies
+RUN npm install --production
 
-# Copy app
-WORKDIR /var/www/html
-COPY src/ ./src/
-COPY init_db.php ./
-COPY init_db_universal.php ./
-COPY register_commands.php ./
-COPY check_extensions.php ./
-COPY index.html ./
-COPY data/ ./data/
+# Copy source code
+COPY . .
 
 # Ensure writable data directory
-RUN mkdir -p /var/www/html/data && chown -R www-data:www-data /var/www/html/data
+RUN mkdir -p /usr/src/app/data && chown -R node:node /usr/src/app/data
 
-# Expose port
+# Switch to non-root user for safety
+USER node
+
+# Expose port 80 as the web server port
 EXPOSE 80
 
-# Default command just runs Apache
-CMD ["apache2-foreground"]
+# Default command to run the interaction server
+CMD ["node", "src/index.js"]

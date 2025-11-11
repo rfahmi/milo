@@ -1,93 +1,129 @@
-# Milo
+# Milo (Node.js version)
 
-Milo is a tiny Discord bot to help you and your family track shared expenses from receipt screenshots.
+Milo is a tiny Discord bot to help you and your family track shared
+expenses from receipt screenshots. This repository contains a
+feature‑equivalent reimplementation of the original PHP project in
+Node.js. All commands, environment variables and the recommended
+Docker invocation remain the same to ease migration.
 
 ## Core idea
 
-- Use `/checkpoint` to start a tracking window.
-- Everyone just drops receipt images in the Discord channel.
-- A cron job polls new messages, sends images to **Gemini** to read the total, and logs them into SQLite.
-- When you run `/checkpoint` again, Milo closes the checkpoint and shows a summary of totals **per user**.
-- `/undo` lets you undo the latest checkpoint if nothing happened after it.
+- Use `/start` (equivalent to `/checkpoint` in the PHP version) to
+  begin a tracking window.
+- Everyone just drops receipt images in the designated Discord
+  channel.
+- A cron job polls new messages, sends images to **Gemini** to read
+  the total, and logs them into SQLite or PostgreSQL.
+- When you run `/end` the bot closes the checkpoint and shows a
+  summary of totals **per user**.
+- `/undo` lets you undo the latest checkpoint if nothing happened
+  after it.
+- `/status` prints the running total without closing the checkpoint.
 
 ## Files
 
-- `src/config.php` – reads configuration from environment variables.
-- `src/helpers.php` – shared helpers (DB, Gemini, Discord utilities).
-- `src/discord_interactions.php` – HTTP endpoint that Discord calls for slash commands.
-- `src/cron_process_messages.php` – CLI script to poll Discord messages and log receipts.
-- `init_db.php` – one-time (or idempotent) script to create SQLite tables.
-- `Dockerfile` – builds a PHP-Apache image with Milo inside.
-- `.github/workflows/docker-publish.yml` – GitHub Actions workflow to build & push the Docker image to Docker Hub.
+- `src/helpers.js` – configuration, database access, Gemini and Discord
+  helpers.
+- `src/index.js` – Express server that handles slash commands.
+- `src/cron_process_messages.js` – CLI script to poll Discord
+  messages and log receipts.
+- `init_db.js` – one‑time script to create tables when using SQLite.
+- `init_db_universal.js` – drop and recreate tables for SQLite or
+  PostgreSQL.
+- `register_commands.js` – register slash commands with Discord.
+- `Dockerfile` – builds a Node.js image with Milo inside.
 
 ## Environment variables
 
-Set these in your hosting / container / CI:
+Set these in your hosting environment or when running the Docker
+container:
 
-- `DISCORD_PUBLIC_KEY` – your application's public key from Discord Developer Portal.
+- `DISCORD_PUBLIC_KEY` – your application's public key from Discord Developer
+  Portal.
 - `DISCORD_BOT_TOKEN` – bot token.
 - `DISCORD_CHANNEL_ID` – the ID of the channel you want Milo to watch.
+- `DISCORD_APPLICATION_ID` – application ID required for registering commands.
 - `GEMINI_API_KEY` – your Gemini API key.
-- `GEMINI_MODEL` – (optional) model name, defaults to `gemini-1.5-pro`.
-- `DATABASE_URL` – (optional) PostgreSQL connection string for persistent data (recommended for production).
-- `DB_PATH` – (optional) path to SQLite DB, defaults to `data/receipts.db` (used if `DATABASE_URL` not set).
+- `GEMINI_MODEL` – (optional) model name, defaults to `gemini-2.5-flash`.
+- `DATABASE_URL` – (optional) PostgreSQL connection string for persistent
+  data (recommended for production).
+- `DB_PATH` – (optional) path to SQLite DB, defaults to `data/receipts.db`
+  (used if `DATABASE_URL` not set).
 
-## Database initialization
+You can copy `.env.example` to `.env` and fill in your values.
 
-The bot supports both PostgreSQL (recommended for production) and SQLite (for local development).
+## Database initialisation
+
+The bot supports both PostgreSQL (recommended for production) and
+SQLite (for local development).
 
 **For SQLite (default):**
+
 ```bash
-php init_db.php
+npm run init-db
 ```
 
-**For PostgreSQL or auto-detect:**
+**For PostgreSQL or auto‑detect:**
+
 ```bash
-php init_db_universal.php
+npm run init-db-universal
 ```
 
-This will create the database tables. See `POSTGRES.md` for setting up persistent PostgreSQL on Render.
+This will create the database tables. Run the script inside your
+container or environment where the `DATABASE_URL` points to a valid
+Postgres instance.
 
 ## Discord setup
 
-1. Create a new application in Discord Developer Portal.
+1. Create a new application in the Discord Developer Portal.
 2. Add a **Bot** user and record:
    - Bot token
    - Public key
 3. Invite the bot to your server with a URL that includes:
    - Scopes: `bot`, `applications.commands`
    - Permissions: at least `Send Messages` and `Read Messages/View Channel`.
-4. In the **Interactions** tab, set the **Interactions Endpoint URL** to the URL of:
-   - `src/discord_interactions.php` exposed via your web server (for example `https://yourdomain.com/discord_interactions.php`).
+4. In the **Interactions** tab, set the **Interactions Endpoint URL** to
+   the URL of your server exposing `/discord_interactions` (for example
+   `https://yourdomain.com/discord_interactions`).
 
-### Slash commands to create in your app
+### Slash commands to create
 
-Define these application commands in the Developer Portal:
+Register these application commands in the Developer Portal or run
 
-- `/checkpoint` – no options. Starts or closes a checkpoint and prints a summary when closing.
-- `/undo` – no options. Undoes the latest checkpoint if no messages were seen after it.
+```bash
+npm run register-commands
+```
+
+The commands are:
+
+- `/start` – no options. Starts a new checkpoint.
+- `/end` – no options. Closes the active checkpoint and prints a summary.
+- `/status` – no options. Shows the current running total without closing.
+- `/undo` – no options. Undoes the latest checkpoint if nothing happened after it.
 
 ## Cron job (message polling)
 
-The cron job is what scans the Discord channel for new messages and logs image receipts.
-
-Example cron entry (Linux):
+The cron job scans the Discord channel for new messages and logs
+image receipts. Run it periodically (e.g. every minute) outside of
+the HTTP server:
 
 ```cron
-* * * * * /usr/bin/php -q /path/to/repo/src/cron_process_messages.php > /dev/null 2>&1
+* * * * * /usr/bin/node /path/to/repo/src/cron_process_messages.js > /dev/null 2>&1
 ```
 
-Adjust paths and PHP binary location to your environment.
+Adjust paths and the Node binary location to your environment. You can
+also invoke it with `docker exec` against a running container (see
+below).
 
 ## Docker
 
 Build locally:
 
 ```bash
-docker build -t rfahmi/milo:local .
+docker build -t milo:local .
 ```
 
-Run:
+Run (environment variables set via `-e` flags):
 
 ```bash
 docker run -p 8080:80 \
@@ -95,34 +131,20 @@ docker run -p 8080:80 \
   -e DISCORD_BOT_TOKEN=... \
   -e DISCORD_CHANNEL_ID=... \
   -e GEMINI_API_KEY=... \
-  --name milo rfahmi/milo:local
+  --name milo milo:local
 ```
 
-You still need a cron job *somewhere* to invoke:
+The server listens on port 80 inside the container, so port 8080 on
+your host will serve the `/discord_interactions` endpoint. You still
+need a cron job **somewhere** to invoke the message processor:
 
 ```bash
-docker exec milo php /var/www/html/src/cron_process_messages.php
+docker exec milo node src/cron_process_messages.js
 ```
 
-For example, add a cron entry on the Docker host that calls `docker exec`.
-
-## GitHub Actions → Docker Hub
-
-The workflow `.github/workflows/docker-publish.yml` expects:
-
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN`
-
-as GitHub repository secrets.
-
-Whenever you push to `main` or `master`, it will:
-
-- Build the Docker image.
-- Push it to Docker Hub as:
-
-  - `${DOCKERHUB_USERNAME}/milo:latest`
-  - `${DOCKERHUB_USERNAME}/milo:<git-sha>`
+For example, add a cron entry on the Docker host that calls
+`docker exec` periodically.
 
 ## License
 
-MIT-licensed. Use, fork, and hack it as you like.
+MIT. Use, fork and hack it as you like.
