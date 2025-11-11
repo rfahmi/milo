@@ -12,13 +12,23 @@ if (!$applicationId || !$botToken) {
 
 $commands = [
     [
-        'name' => 'checkpoint',
-        'description' => 'Start or close a checkpoint to track receipts',
+        'name' => 'start',
+        'description' => 'Start a new checkpoint to track receipts',
+        'type' => 1
+    ],
+    [
+        'name' => 'end',
+        'description' => 'Close the active checkpoint and show summary',
+        'type' => 1
+    ],
+    [
+        'name' => 'status',
+        'description' => 'Check current checkpoint total without closing it',
         'type' => 1
     ],
     [
         'name' => 'undo',
-        'description' => 'Undo the latest checkpoint if no messages occurred after it',
+        'description' => 'Undo the latest checkpoint',
         'type' => 1
     ]
 ];

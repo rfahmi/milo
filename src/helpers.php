@@ -11,11 +11,18 @@ function get_db() {
     // Check if PostgreSQL connection string is provided
     if (DATABASE_URL) {
         try {
-            $db = new PDO(DATABASE_URL);
-            $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-            return $db;
+            // Check if pdo_pgsql extension is loaded
+            if (!extension_loaded('pdo_pgsql')) {
+                error_log("WARNING: pdo_pgsql extension not loaded, falling back to SQLite");
+                // Fall through to SQLite
+            } else {
+                $db = new PDO(DATABASE_URL);
+                $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+                return $db;
+            }
         } catch (PDOException $e) {
-            throw new Exception("PostgreSQL connection failed: " . $e->getMessage());
+            error_log("PostgreSQL connection failed: " . $e->getMessage() . ", falling back to SQLite");
+            // Fall through to SQLite
         }
     }
     
@@ -243,4 +250,84 @@ function set_channel_last_message($db, $channelId, $lastMessageId) {
         ':m'  => $lastMessageId,
         ':m2' => $lastMessageId,
     ]);
+}
+
+// Process new messages from Discord (used by cron and interactive commands)
+function process_new_messages($db, $channelId) {
+    if (!DISCORD_BOT_TOKEN) {
+        return ['error' => 'DISCORD_BOT_TOKEN is not set'];
+    }
+
+    // Get last processed message
+    $state = get_channel_state($db, $channelId);
+    $after = $state['last_message_id'] ?? null;
+
+    $url = "https://discord.com/api/v10/channels/{$channelId}/messages?limit=50";
+    if ($after) {
+        $url .= "&after=" . urlencode($after);
+    }
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bot ' . DISCORD_BOT_TOKEN,
+        'User-Agent: MiloBot/1.0'
+    ]);
+    $resp = curl_exec($ch);
+    curl_close($ch);
+
+    $messages = json_decode($resp, true);
+    if (!is_array($messages)) {
+        return ['error' => 'Invalid response from Discord'];
+    }
+
+    if (empty($messages)) {
+        return ['processed' => 0];
+    }
+
+    // Reverse chronological → oldest first
+    $messages = array_reverse($messages);
+
+    $processed = 0;
+    $lastMsgId = $after;
+
+    foreach ($messages as $msg) {
+        $msgId = $msg['id'];
+        $lastMsgId = $msgId;
+
+        // Check if there's an active checkpoint
+        $active = get_active_checkpoint($db, $channelId);
+        if (!$active) {
+            set_channel_last_message($db, $channelId, $msgId);
+            continue;
+        }
+
+        // Check for images
+        $attachments = $msg['attachments'] ?? [];
+        foreach ($attachments as $att) {
+            if (strpos($att['content_type'] ?? '', 'image/') === 0) {
+                $imageUrl = $att['url'];
+                try {
+                    $amount = get_total_from_receipt_gemini($imageUrl);
+                    add_receipt($db, [
+                        ':user_id'       => $msg['author']['id'],
+                        ':user_name'     => $msg['author']['username'],
+                        ':channel_id'    => $channelId,
+                        ':checkpoint_id' => $active['id'],
+                        ':message_id'    => $msgId,
+                        ':image_url'     => $imageUrl,
+                        ':amount'        => $amount,
+                        ':created_at'    => date('c')
+                    ]);
+                    $processed++;
+                } catch (Exception $e) {
+                    error_log("Failed to process receipt {$imageUrl}: " . $e->getMessage());
+                }
+            }
+        }
+
+        set_channel_last_message($db, $channelId, $msgId);
+    }
+
+    return ['processed' => $processed, 'last_message_id' => $lastMsgId];
 }

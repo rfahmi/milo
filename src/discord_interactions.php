@@ -25,27 +25,50 @@ if ($type === 2) {
     $channel = $interaction['channel_id'] ?? DISCORD_CHANNEL_ID;
     $db      = get_db();
 
-    if ($name === 'checkpoint') {
+    // /start - Start a new checkpoint
+    if ($name === 'start') {
         $active = get_active_checkpoint($db, $channel);
-        $currentMessageId = $interaction['id']; // interaction id as marker
-
-        // If no active checkpoint → start new
-        if (!$active) {
-            $id = create_checkpoint($db, $channel, $currentMessageId);
-            // Also sync channel_state starting point if empty
-            $state = get_channel_state($db, $channel);
-            if (!$state) {
-                set_channel_last_message($db, $channel, $currentMessageId);
-            }
+        
+        if ($active) {
             discord_json_response([
                 'type' => 4,
                 'data' => [
-                    'content' => "✅ Checkpoint **#{$id}** started. All images from now will be tracked."
+                    'content' => "❌ Checkpoint #{$active['id']} is already active. Use /end to close it first."
                 ]
             ]);
         }
 
-        // If active → close and summarize
+        $currentMessageId = $interaction['id'];
+        $id = create_checkpoint($db, $channel, $currentMessageId);
+        
+        // Sync channel_state starting point if empty
+        $state = get_channel_state($db, $channel);
+        if (!$state) {
+            set_channel_last_message($db, $channel, $currentMessageId);
+        }
+        
+        discord_json_response([
+            'type' => 4,
+            'data' => [
+                'content' => "✅ Checkpoint **#{$id}** started. All images from now will be tracked."
+            ]
+        ]);
+    }
+
+    // /end - Close the active checkpoint
+    if ($name === 'end') {
+        // First, process any new messages
+        process_new_messages($db, $channel);
+        
+        $active = get_active_checkpoint($db, $channel);
+        if (!$active) {
+            discord_json_response([
+                'type' => 4,
+                'data' => ['content' => "❌ No active checkpoint. Use /start to begin one."]
+            ]);
+        }
+
+        $currentMessageId = $interaction['id'];
         close_checkpoint($db, $active['id'], $currentMessageId);
         $summary = summarize_checkpoint($db, $active['id']);
 
@@ -69,23 +92,48 @@ if ($type === 2) {
         ]);
     }
 
+    // /status - Show current checkpoint status without closing
+    if ($name === 'status') {
+        // First, process any new messages
+        process_new_messages($db, $channel);
+        
+        $active = get_active_checkpoint($db, $channel);
+        if (!$active) {
+            discord_json_response([
+                'type' => 4,
+                'data' => ['content' => "❌ No active checkpoint. Use /start to begin one."]
+            ]);
+        }
+
+        $summary = summarize_checkpoint($db, $active['id']);
+
+        if (!$summary) {
+            $msg = "📊 Checkpoint #{$active['id']} (active)\nNo receipts recorded yet.";
+        } else {
+            $lines = [];
+            $grand = 0;
+            foreach ($summary as $row) {
+                $grand += $row['total'];
+                $lines[] = "- **{$row['user_name']}**: Rp" . number_format($row['total'], 0, ',', '.');
+            }
+            $msg = "📊 Checkpoint #{$active['id']} (active)\n"
+                 . implode("\n", $lines)
+                 . "\n\n**Total**: Rp" . number_format($grand, 0, ',', '.');
+        }
+
+        discord_json_response([
+            'type' => 4,
+            'data' => ['content' => $msg]
+        ]);
+    }
+
+    // /undo - Undo the latest checkpoint
     if ($name === 'undo') {
         $latest = get_latest_checkpoint($db, $channel);
         if (!$latest) {
             discord_json_response([
                 'type' => 4,
                 'data' => ['content' => "❌ No checkpoint to undo."]
-            ]);
-        }
-
-        // Only allow undo if channel_state.last_message_id == checkpoint.start_message_id
-        $state = get_channel_state($db, $channel);
-        if ($state && $state['last_message_id'] !== $latest['start_message_id']) {
-            discord_json_response([
-                'type' => 4,
-                'data' => [
-                    'content' => "❌ Cannot undo. There are messages after the latest checkpoint."
-                ]
             ]);
         }
 

@@ -23,7 +23,7 @@ if (!defined('GEMINI_API_KEY')) {
 }
 
 if (!defined('GEMINI_MODEL')) {
-    define('GEMINI_MODEL', getenv('GEMINI_MODEL') ?: 'gemini-1.5-pro');
+    define('GEMINI_MODEL', getenv('GEMINI_MODEL') ?: 'gemini-2.5-flash');
 }
 
 // Database configuration - supports both PostgreSQL and SQLite
