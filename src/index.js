@@ -24,6 +24,7 @@ const {
   processNewMessages
 } = require('./helpers');
 const { startGateway } = require('./gateway');
+const { registerCommands } = require('../register_commands');
 
 // Load environment variables early
 require('dotenv').config();
@@ -212,10 +213,26 @@ app.post('/process-messages', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 80;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Milo Node server listening on port ${PORT}`);
   
+  // Register/update Discord commands on startup
+  console.log('\n📋 Registering Discord commands...');
+  try {
+    const applicationId = process.env.DISCORD_APPLICATION_ID;
+    const botToken = process.env.DISCORD_BOT_TOKEN;
+    
+    if (applicationId && botToken) {
+      await registerCommands(applicationId, botToken);
+    } else {
+      console.log('⚠️  Skipping command registration: DISCORD_APPLICATION_ID or DISCORD_BOT_TOKEN not set');
+    }
+  } catch (err) {
+    console.error('❌ Failed to register commands:', err.message);
+    console.log('⚠️  Server will continue, but slash commands may not work properly');
+  }
+  
   // Start Discord Gateway for real-time message processing
-  console.log('Starting Discord Gateway...');
+  console.log('\n🌐 Starting Discord Gateway...');
   startGateway();
 });

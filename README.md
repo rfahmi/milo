@@ -95,7 +95,11 @@ Postgres instance.
 
 ### Slash commands to create
 
-Register these application commands in the Developer Portal or run
+The bot automatically registers its slash commands when it starts up.
+Commands are cleaned and re-registered on every startup to ensure
+they're up to date.
+
+You can also manually register commands by running:
 
 ```bash
 npm run register-commands
