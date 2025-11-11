@@ -20,8 +20,10 @@ const {
   setChannelLastMessage,
   isPostgres,
   fetchAll,
-  run
+  run,
+  processNewMessages
 } = require('./helpers');
+const { startGateway } = require('./gateway');
 
 // Load environment variables early
 require('dotenv').config();
@@ -183,7 +185,37 @@ app.post('/discord_interactions', async (req, res) => {
   }
 });
 
+// Endpoint to manually trigger message processing (optional)
+app.post('/process-messages', async (req, res) => {
+  try {
+    const channelId = process.env.DISCORD_CHANNEL_ID;
+    if (!channelId) {
+      return res.status(500).json({ error: 'DISCORD_CHANNEL_ID is not set' });
+    }
+    
+    const conn = await getDB();
+    const result = await processNewMessages(conn, channelId);
+    
+    if (result.error) {
+      return res.status(500).json({ error: result.error });
+    }
+    
+    return res.json({
+      success: true,
+      processed: result.processed || 0,
+      last_message_id: result.last_message_id || 'none'
+    });
+  } catch (err) {
+    console.error('Error processing messages:', err);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 const PORT = process.env.PORT || 80;
 app.listen(PORT, () => {
   console.log(`Milo Node server listening on port ${PORT}`);
+  
+  // Start Discord Gateway for real-time message processing
+  console.log('Starting Discord Gateway...');
+  startGateway();
 });

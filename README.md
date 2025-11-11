@@ -12,8 +12,9 @@ Docker invocation remain the same to ease migration.
   begin a tracking window.
 - Everyone just drops receipt images in the designated Discord
   channel.
-- A cron job polls new messages, sends images to **Gemini** to read
-  the total, and logs them into SQLite or PostgreSQL.
+- The bot listens to messages in real-time via **Discord Gateway**
+  (WebSocket), sends images to **Gemini** to read the total, and logs
+  them into SQLite or PostgreSQL.
 - When you run `/end` the bot closes the checkpoint and shows a
   summary of totals **per user**.
 - `/undo` lets you undo the latest checkpoint if nothing happened
@@ -24,9 +25,12 @@ Docker invocation remain the same to ease migration.
 
 - `src/helpers.js` – configuration, database access, Gemini and Discord
   helpers.
-- `src/index.js` – Express server that handles slash commands.
-- `src/cron_process_messages.js` – CLI script to poll Discord
-  messages and log receipts.
+- `src/index.js` – Express server that handles slash commands and starts
+  the Gateway client.
+- `src/gateway.js` – Discord Gateway client for real-time message
+  processing.
+- `src/cron_process_messages.js` – legacy CLI script (can be used for
+  manual batch processing).
 - `init_db.js` – one‑time script to create tables when using SQLite.
 - `init_db_universal.js` – drop and recreate tables for SQLite or
   PostgreSQL.
@@ -82,6 +86,9 @@ Postgres instance.
 3. Invite the bot to your server with a URL that includes:
    - Scopes: `bot`, `applications.commands`
    - Permissions: at least `Send Messages` and `Read Messages/View Channel`.
+   - **Important**: Enable the `Message Content` intent in the Discord
+     Developer Portal under the Bot settings. This is required for the
+     Gateway to receive message content.
 4. In the **Interactions** tab, set the **Interactions Endpoint URL** to
    the URL of your server exposing `/discord_interactions` (for example
    `https://yourdomain.com/discord_interactions`).
@@ -101,19 +108,23 @@ The commands are:
 - `/status` – no options. Shows the current running total without closing.
 - `/undo` – no options. Undoes the latest checkpoint if nothing happened after it.
 
-## Cron job (message polling)
+## Real-time message processing
 
-The cron job scans the Discord channel for new messages and logs
-image receipts. Run it periodically (e.g. every minute) outside of
-the HTTP server:
+The bot uses **Discord Gateway** (WebSocket connection) to listen for
+messages in real-time. When the server starts, it automatically
+connects to Discord and begins processing receipt images as they are
+posted.
 
-```cron
-* * * * * /usr/bin/node /path/to/repo/src/cron_process_messages.js > /dev/null 2>&1
+### Manual trigger endpoint
+
+You can also manually trigger message processing via HTTP POST:
+
+```bash
+curl -X POST http://localhost:8080/process-messages
 ```
 
-Adjust paths and the Node binary location to your environment. You can
-also invoke it with `docker exec` against a running container (see
-below).
+This endpoint processes any messages that might have been missed
+(useful for debugging or recovery scenarios).
 
 ## Docker
 
@@ -135,15 +146,21 @@ docker run -p 8080:80 \
 ```
 
 The server listens on port 80 inside the container, so port 8080 on
-your host will serve the `/discord_interactions` endpoint. You still
-need a cron job **somewhere** to invoke the message processor:
+your host will serve the `/discord_interactions` endpoint. The Discord
+Gateway client will automatically start and connect when the container
+runs, providing real-time message processing.
+
+### Legacy cron script
+
+If needed, you can still manually trigger the legacy batch processing
+script:
 
 ```bash
 docker exec milo node src/cron_process_messages.js
 ```
 
-For example, add a cron entry on the Docker host that calls
-`docker exec` periodically.
+However, this is no longer necessary as the Gateway handles message
+processing in real-time.
 
 ## License
 
