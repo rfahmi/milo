@@ -1,0 +1,23 @@
+name: Process Discord Messages
+
+on:
+  schedule:
+    # Runs every 5 minutes (GitHub Actions limitation on free tier)
+    - cron: '*/5 * * * *'
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  trigger-cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Message Processing
+        run: |
+          curl -f -X GET "${{ secrets.RENDER_URL }}/src/trigger_cron.php?secret=${{ secrets.CRON_SECRET }}" || exit 1
+        
+      - name: Log Success
+        if: success()
+        run: echo "Message processing triggered successfully"
+        
+      - name: Log Failure
+        if: failure()
+        run: echo "Failed to trigger message processing"
