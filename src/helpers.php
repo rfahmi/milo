@@ -18,8 +18,36 @@ function get_db() {
         }
         
         try {
-            $db = new PDO(DATABASE_URL);
-            $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            // Parse DATABASE_URL (format: postgres://user:pass@host:port/dbname)
+            $dbUrl = DATABASE_URL;
+            
+            // Parse the URL
+            $parts = parse_url($dbUrl);
+            if (!$parts) {
+                throw new PDOException("Invalid DATABASE_URL format");
+            }
+            
+            $host = $parts['host'] ?? 'localhost';
+            $port = $parts['port'] ?? 5432;
+            $dbname = ltrim($parts['path'] ?? '', '/');
+            $user = $parts['user'] ?? '';
+            $pass = $parts['pass'] ?? '';
+            
+            // Build PDO DSN string
+            $dsn = sprintf(
+                "pgsql:host=%s;port=%d;dbname=%s",
+                $host,
+                $port,
+                $dbname
+            );
+            
+            error_log("Connecting to PostgreSQL: host=$host, port=$port, dbname=$dbname, user=$user");
+            
+            $db = new PDO($dsn, $user, $pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
+            ]);
+            
             error_log("Successfully connected to PostgreSQL");
             return $db;
         } catch (PDOException $e) {
