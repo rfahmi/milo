@@ -38,6 +38,12 @@ This guide shows you how to use Render's free PostgreSQL database for persistent
 2. Copy the **"Internal Database URL"** 
    - Format: `postgres://user:password@host:port/database`
    - Use **Internal** URL (faster, free internal network)
+   - **Important:** Render provides this in the correct format for PHP PDO
+
+**Example format:**
+```
+postgres://milo_user:abc123xyz@dpg-xxxxx-a.oregon-postgres.render.com/milo_db
+```
 
 ### 3. Add DATABASE_URL to Web Service
 
@@ -49,7 +55,11 @@ This guide shows you how to use Render's free PostgreSQL database for persistent
    - **Value:** Paste the Internal Database URL from step 2
 5. Click **"Save Changes"**
 
-The service will automatically redeploy.
+**Important:** After adding this variable, you MUST rebuild with a clean cache:
+1. Go to **"Manual Deploy"** → **"Clear build cache & deploy"**
+2. This ensures the Docker image is rebuilt with PostgreSQL extensions
+
+The service will redeploy with PostgreSQL support.
 
 ### 4. Initialize Database Schema
 
@@ -140,15 +150,46 @@ Then run `init_db_universal.php` again.
 
 ## Troubleshooting
 
+### "could not find driver" Error
+
+**Symptom:** 
+```json
+{
+  "database": {
+    "status": "error",
+    "message": "PostgreSQL connection failed: could not find driver"
+  }
+}
+```
+
+**Solutions:**
+1. **Check if extensions are loaded:**
+   - Visit: `https://your-service.onrender.com/check_extensions.php`
+   - Look for `"pdo_pgsql_loaded": true`
+
+2. **Rebuild with clean cache:**
+   - Go to Render Dashboard → Your web service
+   - Click **"Manual Deploy"** → **"Clear build cache & deploy"**
+   - This forces a complete rebuild of the Docker image with PostgreSQL extensions
+
+3. **Verify Dockerfile has PostgreSQL support:**
+   - Check that your Dockerfile includes `pdo_pgsql` installation
+   - The latest version should have this configured correctly
+
+4. **Check logs during deployment:**
+   - Look for "Installing PHP extensions" step
+   - Should see successful installation of pdo_pgsql
+
 ### Connection Errors
 
 **Symptom:** "PostgreSQL connection failed"
 
 **Solutions:**
-- Verify `DATABASE_URL` is set correctly
-- Use **Internal** URL, not External
+- Verify `DATABASE_URL` is set correctly (no quotes, just the URL)
+- Use **Internal** URL from Render PostgreSQL dashboard, not External
 - Check PostgreSQL service is running in Render
 - Ensure web service and PostgreSQL are in same region
+- Format should be: `postgres://user:password@host:port/database`
 
 ### Schema Errors
 

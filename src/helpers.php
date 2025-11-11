@@ -10,23 +10,26 @@ function discord_json_response($data) {
 function get_db() {
     // Check if PostgreSQL connection string is provided
     if (DATABASE_URL) {
+        // Check if pdo_pgsql extension is loaded
+        if (!extension_loaded('pdo_pgsql')) {
+            $availableDrivers = PDO::getAvailableDrivers();
+            error_log("ERROR: pdo_pgsql extension not loaded. Available PDO drivers: " . implode(', ', $availableDrivers));
+            throw new PDOException("PostgreSQL connection failed: could not find driver. Available drivers: " . implode(', ', $availableDrivers));
+        }
+        
         try {
-            // Check if pdo_pgsql extension is loaded
-            if (!extension_loaded('pdo_pgsql')) {
-                error_log("WARNING: pdo_pgsql extension not loaded, falling back to SQLite");
-                // Fall through to SQLite
-            } else {
-                $db = new PDO(DATABASE_URL);
-                $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                return $db;
-            }
+            $db = new PDO(DATABASE_URL);
+            $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            error_log("Successfully connected to PostgreSQL");
+            return $db;
         } catch (PDOException $e) {
-            error_log("PostgreSQL connection failed: " . $e->getMessage() . ", falling back to SQLite");
-            // Fall through to SQLite
+            error_log("PostgreSQL connection failed: " . $e->getMessage());
+            throw new PDOException("PostgreSQL connection failed: " . $e->getMessage());
         }
     }
     
     // Fallback to SQLite
+    error_log("Using SQLite database (DATABASE_URL not set)");
     $dbPath = DB_PATH;
     $dir = dirname($dbPath);
     if (!is_dir($dir)) {

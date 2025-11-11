@@ -18,6 +18,11 @@ $results = [];
 
 // 1. Initialize Database
 try {
+    // Check PDO extensions first
+    $pdoDrivers = PDO::getAvailableDrivers();
+    $hasPostgres = in_array('pgsql', $pdoDrivers);
+    $hasSqlite = in_array('sqlite', $pdoDrivers);
+    
     ob_start();
     require_once __DIR__ . '/../init_db_universal.php';
     $dbOutput = ob_get_clean();
@@ -25,12 +30,18 @@ try {
         'status' => 'success',
         'message' => 'Database initialized',
         'output' => $dbOutput,
-        'type' => is_postgres() ? 'PostgreSQL' : 'SQLite'
+        'type' => is_postgres() ? 'PostgreSQL' : 'SQLite',
+        'available_drivers' => $pdoDrivers,
+        'pdo_pgsql_available' => $hasPostgres
     ];
 } catch (Exception $e) {
+    $pdoDrivers = PDO::getAvailableDrivers();
     $results['database'] = [
         'status' => 'error',
-        'message' => $e->getMessage()
+        'message' => $e->getMessage(),
+        'available_drivers' => $pdoDrivers,
+        'pdo_pgsql_available' => in_array('pgsql', $pdoDrivers),
+        'database_url_set' => !empty(getenv('DATABASE_URL'))
     ];
 }
 

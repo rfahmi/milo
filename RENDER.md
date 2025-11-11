@@ -262,8 +262,19 @@ In your Discord channel:
 - Manually trigger: Visit `/src/trigger_cron.php?secret=YOUR_SECRET`
 
 ### Database Errors
-- Run `php /var/www/html/init_db.php` in Render Shell
-- Check that `/var/www/html/data` directory is writable
+- **"could not find driver" error:**
+  1. First, check diagnostics: Visit `https://your-service.onrender.com/check_extensions.php`
+  2. Ensure your Docker image was rebuilt after updating the Dockerfile
+  3. In Render Dashboard, go to **"Manual Deploy"** → **"Clear build cache & deploy"**
+  4. Check that `DATABASE_URL` environment variable is set correctly
+  5. Verify PostgreSQL extension is loaded by checking logs during deployment
+- **General database issues:**
+  - Run `php /var/www/html/init_db_universal.php` in Render Shell
+  - Check that `/var/www/html/data` directory is writable (SQLite fallback)
+- **PostgreSQL not connecting:**
+  - Verify `DATABASE_URL` format: `postgres://user:password@host:port/database`
+  - For Render PostgreSQL, get the correct connection string from your PostgreSQL service
+  - Check Render PostgreSQL service is in the same region and running
 
 ### Free Tier Limitations
 - Render free tier spins down after 15 minutes of inactivity
