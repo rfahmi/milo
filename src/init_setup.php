@@ -19,12 +19,13 @@ $results = [];
 // 1. Initialize Database
 try {
     ob_start();
-    require_once __DIR__ . '/../init_db.php';
+    require_once __DIR__ . '/../init_db_universal.php';
     $dbOutput = ob_get_clean();
     $results['database'] = [
         'status' => 'success',
         'message' => 'Database initialized',
-        'output' => $dbOutput
+        'output' => $dbOutput,
+        'type' => is_postgres() ? 'PostgreSQL' : 'SQLite'
     ];
 } catch (Exception $e) {
     $results['database'] = [

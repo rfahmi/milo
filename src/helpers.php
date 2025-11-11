@@ -8,6 +8,18 @@ function discord_json_response($data) {
 }
 
 function get_db() {
+    // Check if PostgreSQL connection string is provided
+    if (DATABASE_URL) {
+        try {
+            $db = new PDO(DATABASE_URL);
+            $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            return $db;
+        } catch (PDOException $e) {
+            throw new Exception("PostgreSQL connection failed: " . $e->getMessage());
+        }
+    }
+    
+    // Fallback to SQLite
     $dbPath = DB_PATH;
     $dir = dirname($dbPath);
     if (!is_dir($dir)) {
@@ -16,6 +28,10 @@ function get_db() {
     $db = new PDO('sqlite:' . $dbPath);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     return $db;
+}
+
+function is_postgres() {
+    return !empty(DATABASE_URL);
 }
 
 function verify_discord_request() {
@@ -64,8 +80,9 @@ function get_total_from_receipt_gemini($imageUrl) {
                 [
                     "text" => "You are reading a shopping receipt (usually Indonesian, IDR). "
                             . "Extract ONLY the grand total amount paid. "
-                            . "Return ONLY the number like 120500 (no currency, no extra text). "
-                            . "If unsure, make your best guess."
+                            . "Return ONLY the number like 120500 (no currency, no extra text, no periods, no commas). "
+                            . "If you see multiple numbers, return the LARGEST one (the grand total). "
+                            . "Examples: If total is Rp 125.000, return: 125000"
                 ],
                 [
                     "inline_data" => [
@@ -90,22 +107,49 @@ function get_total_from_receipt_gemini($imageUrl) {
         curl_close($ch);
         throw new Exception("Curl error calling Gemini: {$err}");
     }
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+
+    if ($httpCode !== 200) {
+        throw new Exception("Gemini API error (HTTP {$httpCode}): {$res}");
+    }
 
     $json = json_decode($res, true);
     if (!is_array($json)) {
-        throw new Exception("Invalid JSON from Gemini");
+        throw new Exception("Invalid JSON from Gemini: {$res}");
     }
 
+    // Check for API errors
+    if (isset($json['error'])) {
+        $errorMsg = $json['error']['message'] ?? 'Unknown error';
+        throw new Exception("Gemini API error: {$errorMsg}");
+    }
+
+    // Extract text from response
     $text = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
-
-    // Get first number like 12345 or 12345.67
-    $clean = str_replace([',', ' '], '', $text);
-    if (preg_match('/(\d+(\.\d+)?)/', $clean, $m)) {
-        return floatval($m[1]);
+    
+    if (empty($text)) {
+        // Log the full response for debugging
+        throw new Exception("Empty response from Gemini. Full response: " . json_encode($json));
     }
 
-    throw new Exception("Could not parse total from Gemini: " . $text);
+    // Clean and extract number
+    // Remove common currency symbols and text
+    $clean = preg_replace('/[Rp\.,\s]/i', '', $text);
+    
+    // Try to find any number
+    if (preg_match('/(\d+)/', $clean, $m)) {
+        $amount = floatval($m[1]);
+        
+        // Sanity check: amount should be reasonable (between 1000 and 100000000)
+        if ($amount < 100 || $amount > 100000000) {
+            throw new Exception("Extracted amount seems unreasonable: {$amount}. Original text: '{$text}'");
+        }
+        
+        return $amount;
+    }
+
+    throw new Exception("Could not parse total from Gemini response. Text: '{$text}'");
 }
 
 // DB helpers
@@ -179,11 +223,21 @@ function get_channel_state($db, $channelId) {
 }
 
 function set_channel_last_message($db, $channelId, $lastMessageId) {
-    $stmt = $db->prepare("
-        INSERT INTO channel_state (channel_id, last_message_id)
-        VALUES (:c, :m)
-        ON CONFLICT(channel_id) DO UPDATE SET last_message_id = :m2
-    ");
+    if (is_postgres()) {
+        // PostgreSQL syntax
+        $stmt = $db->prepare("
+            INSERT INTO channel_state (channel_id, last_message_id)
+            VALUES (:c, :m)
+            ON CONFLICT(channel_id) DO UPDATE SET last_message_id = :m2
+        ");
+    } else {
+        // SQLite syntax
+        $stmt = $db->prepare("
+            INSERT INTO channel_state (channel_id, last_message_id)
+            VALUES (:c, :m)
+            ON CONFLICT(channel_id) DO UPDATE SET last_message_id = :m2
+        ");
+    }
     $stmt->execute([
         ':c'  => $channelId,
         ':m'  => $lastMessageId,

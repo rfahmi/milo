@@ -50,8 +50,9 @@ $envCheck = [
 ];
 
 // Database file check
-$dbExists = file_exists(DB_PATH);
-$dbWritable = is_writable(dirname(DB_PATH));
+$dbType = is_postgres() ? 'PostgreSQL' : 'SQLite';
+$dbExists = is_postgres() ? true : file_exists(DB_PATH);
+$dbWritable = is_postgres() ? true : is_writable(dirname(DB_PATH));
 
 header('Content-Type: application/json');
 echo json_encode([
@@ -59,7 +60,8 @@ echo json_encode([
     'timestamp' => date('c'),
     'environment' => $envCheck,
     'database' => [
-        'path' => DB_PATH,
+        'type' => $dbType,
+        'connection_string' => is_postgres() ? 'PostgreSQL (DATABASE_URL set)' : DB_PATH,
         'exists' => $dbExists,
         'directory_writable' => $dbWritable,
     ],

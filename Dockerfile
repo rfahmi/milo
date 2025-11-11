@@ -4,8 +4,9 @@ FROM php:8.2-apache
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libsqlite3-dev \
+        libpq-dev \
         cron \
-    && docker-php-ext-install pdo pdo_sqlite \
+    && docker-php-ext-install pdo pdo_sqlite pdo_pgsql \
     && rm -rf /var/lib/apt/lists/*
 
 # Enable Apache mod_rewrite just in case

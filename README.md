@@ -29,17 +29,24 @@ Set these in your hosting / container / CI:
 - `DISCORD_CHANNEL_ID` – the ID of the channel you want Milo to watch.
 - `GEMINI_API_KEY` – your Gemini API key.
 - `GEMINI_MODEL` – (optional) model name, defaults to `gemini-1.5-pro`.
-- `DB_PATH` – (optional) path to SQLite DB, defaults to `data/receipts.db`.
+- `DATABASE_URL` – (optional) PostgreSQL connection string for persistent data (recommended for production).
+- `DB_PATH` – (optional) path to SQLite DB, defaults to `data/receipts.db` (used if `DATABASE_URL` not set).
 
 ## Database initialization
 
-Run once (or anytime you want to ensure schema exists):
+The bot supports both PostgreSQL (recommended for production) and SQLite (for local development).
 
+**For SQLite (default):**
 ```bash
 php init_db.php
 ```
 
-This will create the SQLite DB and tables under `DB_PATH`.
+**For PostgreSQL or auto-detect:**
+```bash
+php init_db_universal.php
+```
+
+This will create the database tables. See `POSTGRES.md` for setting up persistent PostgreSQL on Render.
 
 ## Discord setup
 

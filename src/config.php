@@ -26,7 +26,15 @@ if (!defined('GEMINI_MODEL')) {
     define('GEMINI_MODEL', getenv('GEMINI_MODEL') ?: 'gemini-1.5-pro');
 }
 
+// Database configuration - supports both PostgreSQL and SQLite
+if (!defined('DATABASE_URL')) {
+    // PostgreSQL connection string (e.g., postgres://user:pass@host:port/dbname)
+    // If set, this takes priority over SQLite
+    define('DATABASE_URL', getenv('DATABASE_URL') ?: '');
+}
+
 if (!defined('DB_PATH')) {
-    // Default: "data/receipts.db" relative to this file
-    define('DB_PATH', __DIR__ . '/../data/receipts.db');
+    // SQLite fallback: "data/receipts.db" relative to this file
+    // Used if DATABASE_URL is not set
+    define('DB_PATH', getenv('DB_PATH') ?: __DIR__ . '/../data/receipts.db');
 }

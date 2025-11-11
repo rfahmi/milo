@@ -58,6 +58,7 @@ Click **"Advanced"** and add these environment variables:
 | `DISCORD_CHANNEL_ID` | Your channel ID | Right-click channel → Copy ID |
 | `GEMINI_API_KEY` | Your Gemini API key | From Google AI Studio |
 | `GEMINI_MODEL` | `gemini-1.5-pro` | Optional, defaults to this |
+| `DATABASE_URL` | PostgreSQL connection string | **Optional but recommended** - See POSTGRES.md for persistent data |
 | `INIT_SECRET` | Random string | For one-time setup (optional, see step 8) |
 | `CRON_SECRET` | Random string | For cron endpoint security (optional, see step 10) |
 
@@ -68,6 +69,8 @@ openssl rand -hex 32
 ```
 
 Or use any random string generator.
+
+**Note:** If you don't set `DATABASE_URL`, the bot uses SQLite (data lost on redeploy). See **POSTGRES.md** for setting up persistent PostgreSQL storage.
 
 ### 5. Configure Health Check (Optional)
 
@@ -265,6 +268,7 @@ In your Discord channel:
 ### Free Tier Limitations
 - Render free tier spins down after 15 minutes of inactivity
 - First request after spin-down may take 30-60 seconds
+- **SQLite data is lost on redeploy** - Use PostgreSQL for persistence (see POSTGRES.md)
 - Consider upgrading for production use
 
 ## Cost Estimate
