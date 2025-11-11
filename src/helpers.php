@@ -226,10 +226,23 @@ function close_checkpoint($db, $checkpointId, $endMessageId) {
 }
 
 function add_receipt($db, $data) {
-    $stmt = $db->prepare("
-        INSERT INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, created_at)
-        VALUES (:user_id, :user_name, :channel_id, :checkpoint_id, :message_id, :image_url, :amount, :created_at)
-    ");
+    $isPostgres = is_postgres();
+    
+    if ($isPostgres) {
+        // PostgreSQL: Use ON CONFLICT DO NOTHING
+        $stmt = $db->prepare("
+            INSERT INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, created_at)
+            VALUES (:user_id, :user_name, :channel_id, :checkpoint_id, :message_id, :image_url, :amount, :created_at)
+            ON CONFLICT (checkpoint_id, message_id, image_url) DO NOTHING
+        ");
+    } else {
+        // SQLite: Use INSERT OR IGNORE
+        $stmt = $db->prepare("
+            INSERT OR IGNORE INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, created_at)
+            VALUES (:user_id, :user_name, :channel_id, :checkpoint_id, :message_id, :image_url, :amount, :created_at)
+        ");
+    }
+    
     $stmt->execute($data);
     return $db->lastInsertId();
 }
