@@ -187,6 +187,38 @@ app.post('/discord_interactions', async (req, res) => {
 });
 
 // Endpoint to manually trigger message processing (optional)
+// Health check endpoint for monitoring and keep-alive
+app.get('/health', async (req, res) => {
+  try {
+    const conn = await getDB();
+    const gatewayClient = require('./gateway').getClient();
+    
+    const status = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      gateway: gatewayClient ? 'connected' : 'disconnected',
+      database: conn.type
+    };
+    
+    return res.json(status);
+  } catch (err) {
+    return res.status(500).json({ 
+      status: 'error', 
+      error: err.message 
+    });
+  }
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    name: 'Milo Discord Bot',
+    status: 'running',
+    message: 'Discord receipt tracking bot is alive!'
+  });
+});
+
 app.post('/process-messages', async (req, res) => {
   try {
     const channelId = process.env.DISCORD_CHANNEL_ID;
