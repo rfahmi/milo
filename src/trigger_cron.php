@@ -86,22 +86,28 @@ foreach ($messages as $msg) {
         $userName = $msg['author']['username'] ?? 'Unknown';
 
         // Ask Gemini to extract total
-        $total = extract_total_from_image($imageUrl);
-        if ($total === null) {
+        try {
+            $amount = get_total_from_receipt_gemini($imageUrl);
+        } catch (Exception $e) {
+            // Log error but continue processing other images
+            error_log("Failed to extract total from {$imageUrl}: " . $e->getMessage());
             continue;
         }
 
         // Insert receipt
         $stmt = $db->prepare("
-            INSERT INTO receipts (checkpoint_id, user_id, user_name, total, message_id)
-            VALUES (:cid, :uid, :uname, :total, :mid)
+            INSERT INTO receipts (checkpoint_id, user_id, user_name, channel_id, message_id, image_url, amount, created_at)
+            VALUES (:cid, :uid, :uname, :ch, :mid, :img, :amt, :created)
         ");
         $stmt->execute([
             ':cid' => $active['id'],
             ':uid' => $userId,
             ':uname' => $userName,
-            ':total' => $total,
-            ':mid' => $msgId
+            ':ch' => $channelId,
+            ':mid' => $msgId,
+            ':img' => $imageUrl,
+            ':amt' => $amount,
+            ':created' => date('c')
         ]);
         $receiptsAdded++;
     }
