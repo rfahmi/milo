@@ -1,0 +1,4 @@
+/data/receipts.db
+/data/*.sqlite
+/vendor/
+.env
