@@ -61,7 +61,7 @@ if ($type === 2) {
     // /end - Close the active checkpoint
     if ($name === 'end') {
         // First, process any new messages
-        process_new_messages($db, $channel);
+        // process_new_messages($db, $channel);
         
         $active = get_active_checkpoint($db, $channel);
         if (!$active) {
@@ -120,7 +120,7 @@ if ($type === 2) {
     // /status - Show current checkpoint status without closing
     if ($name === 'status') {
         // First, process any new messages
-        process_new_messages($db, $channel);
+        // process_new_messages($db, $channel);
         
         $active = get_active_checkpoint($db, $channel);
         if (!$active) {
