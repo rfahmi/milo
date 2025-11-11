@@ -19,6 +19,8 @@ RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 WORKDIR /var/www/html
 COPY src/ ./src/
 COPY init_db.php ./
+COPY init_db_universal.php ./
+COPY register_commands.php ./
 COPY index.html ./
 COPY data/ ./data/
 
