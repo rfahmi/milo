@@ -70,6 +70,17 @@ if ($type === 2) {
 
         $currentMessageId = $interaction['id'];
         close_checkpoint($db, $active['id'], $currentMessageId);
+        
+        // Get detailed receipts
+        $stmt = $db->prepare("
+            SELECT user_name, amount, created_at, message_id
+            FROM receipts
+            WHERE checkpoint_id = :cid
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([':cid' => $active['id']]);
+        $receipts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
         $summary = summarize_checkpoint($db, $active['id']);
 
         if (!$summary) {
@@ -77,10 +88,21 @@ if ($type === 2) {
         } else {
             $lines = [];
             $grand = 0;
+            
+            // Add detailed items
+            $lines[] = "**Receipts:**";
+            foreach ($receipts as $idx => $receipt) {
+                $num = $idx + 1;
+                $amt = number_format($receipt['amount'], 0, ',', '.');
+                $lines[] = "{$num}. {$receipt['user_name']}: Rp{$amt}";
+            }
+            
+            $lines[] = "\n**Summary by User:**";
             foreach ($summary as $row) {
                 $grand += $row['total'];
                 $lines[] = "- **{$row['user_name']}**: Rp" . number_format($row['total'], 0, ',', '.');
             }
+            
             $msg = "📊 Checkpoint #{$active['id']} closed.\n"
                  . implode("\n", $lines)
                  . "\n\n**Total**: Rp" . number_format($grand, 0, ',', '.');
@@ -105,6 +127,16 @@ if ($type === 2) {
             ]);
         }
 
+        // Get detailed receipts
+        $stmt = $db->prepare("
+            SELECT user_name, amount, created_at, message_id
+            FROM receipts
+            WHERE checkpoint_id = :cid
+            ORDER BY created_at ASC
+        ");
+        $stmt->execute([':cid' => $active['id']]);
+        $receipts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
         $summary = summarize_checkpoint($db, $active['id']);
 
         if (!$summary) {
@@ -112,10 +144,21 @@ if ($type === 2) {
         } else {
             $lines = [];
             $grand = 0;
+            
+            // Add detailed items
+            $lines[] = "**Receipts:**";
+            foreach ($receipts as $idx => $receipt) {
+                $num = $idx + 1;
+                $amt = number_format($receipt['amount'], 0, ',', '.');
+                $lines[] = "{$num}. {$receipt['user_name']}: Rp{$amt}";
+            }
+            
+            $lines[] = "\n**Summary by User:**";
             foreach ($summary as $row) {
                 $grand += $row['total'];
                 $lines[] = "- **{$row['user_name']}**: Rp" . number_format($row['total'], 0, ',', '.');
             }
+            
             $msg = "📊 Checkpoint #{$active['id']} (active)\n"
                  . implode("\n", $lines)
                  . "\n\n**Total**: Rp" . number_format($grand, 0, ',', '.');
