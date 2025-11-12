@@ -407,5 +407,6 @@ module.exports = {
   setChannelLastMessage,
   processNewMessages,
   fetchOne,
-  fetchAll
+  fetchAll,
+  run
 };

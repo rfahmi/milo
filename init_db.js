@@ -39,7 +39,8 @@ const { getDB, isPostgres, run } = require('./src/helpers');
         image_url TEXT,
         amount REAL,
         created_at TEXT,
-        FOREIGN KEY(checkpoint_id) REFERENCES checkpoints(id)
+        FOREIGN KEY(checkpoint_id) REFERENCES checkpoints(id),
+        UNIQUE(checkpoint_id, message_id, image_url)
       );`,
       []
     );
