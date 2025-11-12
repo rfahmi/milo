@@ -249,22 +249,33 @@ async function generateSassyComment(imageUrl) {
         }
       ]
     };
+    
+    console.log('Requesting sassy comment from Gemini...');
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    
     if (!resp.ok) {
+      const errText = await resp.text();
+      console.error('Gemini API error for sassy comment:', resp.status, errText);
       return 'Gambarnya aneh nih, gue ga ngerti. Yang jelas ini bukan struk!';
     }
+    
     const json = await resp.json();
+    console.log('Gemini response:', JSON.stringify(json, null, 2));
+    
     const comment = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (comment) {
+    if (comment && comment.trim().length > 0) {
+      console.log('Generated sassy comment:', comment.trim());
       return comment.trim();
     }
+    
+    console.log('Empty comment from Gemini, using fallback');
     return 'Heh, ini gambar apaan? Bukan struk belanjaan pokoknya...';
   } catch (e) {
-    console.error('Failed to generate sassy comment:', e.message);
+    console.error('Failed to generate sassy comment:', e.message, e.stack);
     return 'Waduh, gambarnya aneh. Yang pasti ini bukan struk belanjaan deh!';
   }
 }
@@ -505,7 +516,8 @@ async function processNewMessages(conn, channelId) {
           });
         }
       } catch (e) {
-        console.error(`Failed to process receipt ${imageUrl}:`, e.message);
+        // Image is not a valid receipt, generate a sassy comment
+        console.log(`Not a receipt (${imageUrl}): ${e.message}`);
         // Generate a sassy comment when image is not a valid receipt
         const sassyComment = await generateSassyComment(imageUrl);
         try {
