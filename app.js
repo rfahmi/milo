@@ -1,3 +1,4 @@
-// app.js – entry untuk cPanel Passenger
+// app.js (shim Passenger)
+process.chdir(__dirname);
 require('dotenv').config();
-require('./src/index.js'); // file utama yang nyalain Express + Discord Gateway
+require('./src/index.js');
