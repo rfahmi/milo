@@ -54,6 +54,21 @@ container:
 - `DB_PATH` – (optional) path to SQLite DB, defaults to `data/receipts.db`
   (used if `DATABASE_URL` not set).
 
+### Railway deployment notes
+
+For Railway deployment:
+
+1. **Recommended: Use PostgreSQL**
+   - Add a PostgreSQL plugin in Railway
+   - Railway will automatically set `DATABASE_URL`
+   - Run `npm run init-db-universal` to initialize tables
+
+2. **Alternative: Use SQLite with volume**
+   - Create a volume mounted at `/data` in Railway
+   - Set `DB_PATH=/data/receipts.db` environment variable
+   - The volume ensures data persists across deployments
+   - **Note**: SQLite may have permission issues; PostgreSQL is more reliable
+
 You can copy `.env.example` to `.env` and fill in your values.
 
 ## Database initialisation

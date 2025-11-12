@@ -31,9 +31,40 @@ async function getDB() {
     }
     // SQLite fallback
     const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'receipts.db');
+    const dbDir = path.dirname(dbPath);
+    console.log(`Using SQLite database at: ${dbPath}`);
+    
     // Ensure the containing directory exists
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
-    const db = new sqlite3.Database(dbPath);
+    try {
+      fs.mkdirSync(dbDir, { recursive: true });
+      console.log(`Database directory: ${dbDir}`);
+      
+      // Test write permissions
+      fs.accessSync(dbDir, fs.constants.W_OK);
+      console.log('✓ Database directory is writable');
+      
+      // Check if we can write to the db file itself (if it exists)
+      if (fs.existsSync(dbPath)) {
+        fs.accessSync(dbPath, fs.constants.W_OK);
+        console.log('✓ Database file is writable');
+      }
+    } catch (err) {
+      console.error(`✗ Cannot write to database directory: ${dbDir}`);
+      console.error(`Error: ${err.message}`);
+      console.error('\n🔧 Railway fix:');
+      console.error('  1. Create a volume mounted at /data');
+      console.error('  2. Set environment variable: DB_PATH=/data/receipts.db');
+      console.error('  3. Redeploy your service');
+      throw err;
+    }
+    
+    const db = new sqlite3.Database(dbPath, (err) => {
+      if (err) {
+        console.error('SQLite connection error:', err.message);
+        throw err;
+      }
+      console.log('✓ SQLite connection established');
+    });
     // Serialise to prevent concurrent writes
     db.serialize();
     return { type: 'sqlite', db };
