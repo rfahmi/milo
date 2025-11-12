@@ -8,6 +8,7 @@ RUN apt-get update \
         libpq-dev \
         postgresql-client \
         cron \
+        gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -22,18 +23,24 @@ RUN npm install --production
 # Copy source code
 COPY . .
 
+# Copy and set up permission fix script
+COPY fix-permissions.sh /usr/local/bin/fix-permissions.sh
+RUN chmod +x /usr/local/bin/fix-permissions.sh
+
 # Ensure writable data directory
 RUN mkdir -p /usr/src/app/data && chown -R node:node /usr/src/app/data
 
-# If using Railway volume at /data, try to make it accessible
-# This runs as root before switching to node user
-RUN mkdir -p /data && chown -R node:node /data 2>/dev/null || true
+# Create /data directory with proper permissions for Railway volume
+RUN mkdir -p /data && chmod 777 /data
 
-# Switch to non-root user for safety
-USER node
+# DON'T switch user yet - the entrypoint needs to run as root to fix permissions
+# USER node will be handled by the script
 
 # Expose port 80 as the web server port
 EXPOSE 80
 
+# Use the script as entrypoint to fix permissions, then run as node user
+ENTRYPOINT ["/usr/local/bin/fix-permissions.sh"]
+
 # Default command to run the interaction server
-CMD ["node", "src/index.js"]
+CMD ["gosu", "node", "node", "src/index.js"]
