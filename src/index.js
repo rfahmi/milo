@@ -5,6 +5,8 @@
 // delegates commands to helper functions. It faithfully reproduces
 // the behaviour of the original PHP endpoint while using promises
 // and modern JavaScript syntax.
+process.env.UNDICI_NO_WASM = '1';        // paksa Undici tanpa WASM
+process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=256';
 
 const express = require('express');
 const {
