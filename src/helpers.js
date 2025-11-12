@@ -13,6 +13,7 @@ const sqlite3 = require('sqlite3');
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const t = require('./translations');
 
 // Cache the database connection promise so that subsequent calls reuse
 // the same connection. Both SQLite and Postgres are supported. When
@@ -141,14 +142,7 @@ async function getTotalFromReceiptGemini(imageUrl) {
       {
         parts: [
           {
-            text:
-              'You are reading a shopping receipt (usually Indonesian, IDR). ' +
-              'If this is NOT a receipt or you cannot find a clear total amount, respond with exactly: NOT_A_RECEIPT\n' +
-              'If this IS a receipt, extract ONLY the grand total amount paid. ' +
-              'Return ONLY the number like 120500 (no currency, no extra text, no periods, no commas). ' +
-              'If you see multiple numbers, return the LARGEST one (the grand total). ' +
-              'Examples: If total is Rp 125.000, return: 125000\n' +
-              'If not a receipt or unclear, return: NOT_A_RECEIPT'
+            text: t.gemini.receiptExtraction
           },
           {
             inline_data: {
@@ -208,13 +202,16 @@ async function getTotalFromReceiptGemini(imageUrl) {
 async function generateSassyComment(imageUrl) {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  if (!apiKey) return 'Heh, ini gambar apaan sih? Bukan struk belanjaan kayaknya...';
+  
+  if (!apiKey) {
+    return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
+  }
   
   try {
     // Download the image into a Buffer
     const imgResp = await fetch(imageUrl);
     if (!imgResp.ok) {
-      return 'Gambarnya gabisa dibuka nih. Kirim yang bener dong!';
+      return t.receipts.imageDownloadFailed();
     }
     const buffer = await imgResp.buffer();
     const imageBase64 = buffer.toString('base64');
@@ -224,20 +221,7 @@ async function generateSassyComment(imageUrl) {
         {
           parts: [
             {
-              text:
-                'Kamu adalah Milo, seekor kucing Persia jantan peliharaan yang bisa ngomong. ' +
-                'Sifatmu agak jutek tapi sebenarnya perhatian. ' +
-                'Tugasmu adalah ngecatat struk belanjaan keluarga, tapi user kirim gambar yang BUKAN struk belanjaan. ' +
-                'Lihat gambar ini dan komen sesuai isinya dengan gaya bahasa Indonesia informal yang jutek tapi lucu. ' +
-                'Maksimal 2 kalimat pendek. Jangan terlalu kasar, tapi juga jangan ramah-ramah amat. ' +
-                'Kayak kucing yang sedikit kesel karena tugasnya terganggu, tapi masih sayang sama pemiliknya.\n\n' +
-                'Sesuaikan komenmu dengan isi gambar:\n' +
-                '- Kalau foto makanan/minuman: "Enak sih kayaknya... tapi mana struknya coba?"\n' +
-                '- Kalau foto selfie/orang: "Ganteng/cantik boleh, tapi gue butuh struk, bukan foto narsis"\n' +
-                '- Kalau foto pemandangan: "Bagus pemandangannya, tapi gue kan lagi nungguin struk belanjaan"\n' +
-                '- Kalau screenshot/meme: "Lucu sih, tapi ini bukan struk tau"\n' +
-                '- Kalau foto random lain: sesuaikan dengan kreatif\n\n' +
-                'PENTING: Jangan bilang "saya" atau "aku", selalu pake "gue". Dan pastikan komentarnya nyambung sama isi gambarnya!'
+              text: t.gemini.sassyComment
             },
             {
               inline_data: {
@@ -260,11 +244,12 @@ async function generateSassyComment(imageUrl) {
     if (!resp.ok) {
       const errText = await resp.text();
       console.error('Gemini API error for sassy comment:', resp.status, errText);
-      return 'Gambarnya aneh nih, gue ga ngerti. Yang jelas ini bukan struk!';
+      
+      // Return random fallback message
+      return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
     }
     
     const json = await resp.json();
-    console.log('Gemini response:', JSON.stringify(json, null, 2));
     
     const comment = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (comment && comment.trim().length > 0) {
@@ -273,10 +258,10 @@ async function generateSassyComment(imageUrl) {
     }
     
     console.log('Empty comment from Gemini, using fallback');
-    return 'Heh, ini gambar apaan? Bukan struk belanjaan pokoknya...';
+    return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
   } catch (e) {
-    console.error('Failed to generate sassy comment:', e.message, e.stack);
-    return 'Waduh, gambarnya aneh. Yang pasti ini bukan struk belanjaan deh!';
+    console.error('Failed to generate sassy comment:', e.message);
+    return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
   }
 }
 
@@ -505,7 +490,7 @@ async function processNewMessages(conn, channelId) {
         if (receiptId) {
           processed++;
           // Acknowledge in channel
-          const ack = `Oke, udah gue catat nih (checkpoint #${active.id}) #${receiptId}: **${msg.author.username}** Rp${amount.toLocaleString('id-ID')}`;
+          const ack = t.receipts.acknowledged(active.id, receiptId, msg.author.username, amount.toLocaleString('id-ID'));
           await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
             method: 'POST',
             headers: {

@@ -12,6 +12,7 @@ const {
   generateSassyComment,
   addReceipt 
 } = require('./helpers');
+const t = require('./translations');
 
 let client = null;
 
@@ -70,7 +71,7 @@ async function processSingleMessage(message) {
 
       if (receiptId) {
         // Acknowledge in channel
-        const ack = `Oke, udah gue catat nih (checkpoint #${active.id}) #${receiptId}: **${message.author.username}** Rp${amount.toLocaleString('id-ID')}`;
+        const ack = t.receipts.acknowledged(active.id, receiptId, message.author.username, amount.toLocaleString('id-ID'));
         await message.channel.send(ack);
         console.log(`Receipt #${receiptId} processed: Rp${amount}`);
       }

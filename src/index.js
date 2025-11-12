@@ -27,6 +27,7 @@ const {
 } = require('./helpers');
 const { startGateway } = require('./gateway');
 const { registerCommands } = require('../register_commands');
+const t = require('./translations');
 
 // Load environment variables early
 require('dotenv').config();
@@ -68,7 +69,7 @@ app.post('/discord_interactions', async (req, res) => {
         return res.json({
           type: 4,
           data: {
-            content: `Heh, checkpoint **#${active.id}** masih jalan tau. Pake /end dulu sana kalo mau beres-beres!`
+            content: t.commands.start.alreadyActive(active.id)
           }
         });
       }
@@ -82,7 +83,7 @@ app.post('/discord_interactions', async (req, res) => {
       return res.json({
         type: 4,
         data: {
-          content: `Ya udah, gue catat ya. Checkpoint **#${id}** dimulai! Kirim aja tuh struk belanjaan kalian...`
+          content: t.commands.start.success(id)
         }
       });
     }
@@ -91,7 +92,7 @@ app.post('/discord_interactions', async (req, res) => {
       if (!active) {
         return res.json({
           type: 4,
-          data: { content: 'Lah, belum ada checkpoint yang jalan. Pake /start dulu dong kalo mau mulai!' }
+          data: { content: t.commands.end.noCheckpoint() }
         });
       }
       const currentMessageId = interaction.id;
@@ -101,22 +102,23 @@ app.post('/discord_interactions', async (req, res) => {
       const summary = await summarizeCheckpoint(conn, active.id);
       let msg;
       if (!summary || summary.length === 0) {
-        msg = `Checkpoint **#${active.id}** udah gue tutup.\nGak ada struk sama sekali? Makan angin aja nih kalian...`;
+        msg = t.commands.end.noReceipts(active.id);
       } else {
         const lines = [];
         let grand = 0;
-        lines.push('**Rincian Struk:**');
+        lines.push(t.summary.receiptBreakdown);
         receipts.forEach((receipt, idx) => {
           const num = idx + 1;
           const amt = Number(receipt.amount).toLocaleString('id-ID');
-          lines.push(`${num}. ${receipt.user_name}: Rp${amt}`);
+          lines.push(t.summary.receiptLine(num, receipt.user_name, amt));
         });
-        lines.push('\n**Siapa Ngabisin Berapa:**');
+        lines.push('\n' + t.summary.userTotals);
         summary.forEach(row => {
           grand += Number(row.total);
-          lines.push(`- **${row.user_name}**: Rp${Number(row.total).toLocaleString('id-ID')}`);
+          const total = Number(row.total).toLocaleString('id-ID');
+          lines.push(t.summary.userLine(row.user_name, total));
         });
-        msg = `Oke, checkpoint **#${active.id}** gue tutup ya!\n` + lines.join('\n') + `\n\n**Total Keseluruhan**: Rp${grand.toLocaleString('id-ID')}`;
+        msg = t.commands.end.success(active.id, lines.join('\n'), grand.toLocaleString('id-ID'));
       }
       return res.json({ type: 4, data: { content: msg } });
     }
@@ -125,29 +127,30 @@ app.post('/discord_interactions', async (req, res) => {
       if (!active) {
         return res.json({
           type: 4,
-          data: { content: 'Belum ada checkpoint yang jalan. Pake /start dulu lah kalo mau mulai!' }
+          data: { content: t.commands.status.noCheckpoint() }
         });
       }
       const receipts = await getReceiptsForCheckpoint(conn, active.id);
       const summary = await summarizeCheckpoint(conn, active.id);
       let msg;
       if (!summary || summary.length === 0) {
-        msg = `Checkpoint **#${active.id}** (masih jalan)\nBelum ada struk nih. Belanja dong sono!`;
+        msg = t.commands.status.noReceipts(active.id);
       } else {
         const lines = [];
         let grand = 0;
-        lines.push('**Rincian Struk:**');
+        lines.push(t.summary.receiptBreakdown);
         receipts.forEach((receipt, idx) => {
           const num = idx + 1;
           const amt = Number(receipt.amount).toLocaleString('id-ID');
-          lines.push(`${num}. ${receipt.user_name}: Rp${amt}`);
+          lines.push(t.summary.receiptLine(num, receipt.user_name, amt));
         });
-        lines.push('\n**Siapa Ngabisin Berapa:**');
+        lines.push('\n' + t.summary.userTotals);
         summary.forEach(row => {
           grand += Number(row.total);
-          lines.push(`- **${row.user_name}**: Rp${Number(row.total).toLocaleString('id-ID')}`);
+          const total = Number(row.total).toLocaleString('id-ID');
+          lines.push(t.summary.userLine(row.user_name, total));
         });
-        msg = `Checkpoint **#${active.id}** (masih jalan)\n` + lines.join('\n') + `\n\n**Total Sementara**: Rp${grand.toLocaleString('id-ID')}`;
+        msg = t.commands.status.running(active.id, lines.join('\n'), grand.toLocaleString('id-ID'));
       }
       return res.json({ type: 4, data: { content: msg } });
     }
@@ -156,7 +159,7 @@ app.post('/discord_interactions', async (req, res) => {
       if (!latest) {
         return res.json({
           type: 4,
-          data: { content: 'Nggak ada yang bisa di-undo nih. Emang belum ada apa-apa.' }
+          data: { content: t.commands.undo.noCheckpoint() }
         });
       }
       // Delete receipts and checkpoint within a transaction
@@ -174,13 +177,13 @@ app.post('/discord_interactions', async (req, res) => {
       }
       return res.json({
         type: 4,
-        data: { content: `Yasudah, checkpoint **#${latest.id}** udah gue hapus. Anggep aja nggak pernah ada deh!` }
+        data: { content: t.commands.undo.success(latest.id) }
       });
     }
     // Unknown command
     return res.json({
       type: 4,
-      data: { content: 'Hah? Gue nggak ngerti perintah itu. Coba yang lain deh...' }
+      data: { content: t.commands.unknown() }
     });
   } catch (err) {
     console.error('Error processing command', err);
