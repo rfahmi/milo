@@ -190,6 +190,70 @@ async function getTotalFromReceiptGemini(imageUrl) {
   throw new Error(`Could not parse total from Gemini response. Text: '${text}'`);
 }
 
+/**
+ * Generate a sassy comment from Gemini when an image is not a valid receipt.
+ * Milo the Persian cat will roast you (nicely).
+ *
+ * @param {string} imageUrl URL of the image
+ * @returns {Promise<string>} a sassy comment about the image
+ */
+async function generateSassyComment(imageUrl) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  if (!apiKey) return 'Heh, ini gambar apaan sih? Bukan struk belanjaan kayaknya...';
+  
+  try {
+    // Download the image into a Buffer
+    const imgResp = await fetch(imageUrl);
+    if (!imgResp.ok) {
+      return 'Gambarnya gabisa dibuka nih. Kirim yang bener dong!';
+    }
+    const buffer = await imgResp.buffer();
+    const imageBase64 = buffer.toString('base64');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    const payload = {
+      contents: [
+        {
+          parts: [
+            {
+              text:
+                'Kamu adalah Milo, seekor kucing Persia jantan peliharaan yang bisa ngomong. ' +
+                'Sifatmu agak jutek tapi sebenarnya perhatian. ' +
+                'Tugasmu adalah ngecatat struk belanjaan, tapi user kirim gambar yang BUKAN struk belanjaan. ' +
+                'Komen gambar ini dengan gaya bahasa Indonesia informal yang jutek tapi lucu, maksimal 2 kalimat pendek. ' +
+                'Jangan terlalu kasar, tapi juga jangan terlalu ramah. Kayak kucing yang sedikit kesel tapi masih sayang. ' +
+                'Contoh: "Ini mah bukan struk, dasar...", "Heh, mana struk belanjanya? Ini apaan sih?", "Gue butuh struk, bukan foto selfie lu..."'
+            },
+            {
+              inline_data: {
+                mime_type: 'image/jpeg',
+                data: imageBase64
+              }
+            }
+          ]
+        }
+      ]
+    };
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      return 'Gambarnya aneh nih, gue ga ngerti. Yang jelas ini bukan struk!';
+    }
+    const json = await resp.json();
+    const comment = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (comment) {
+      return comment.trim();
+    }
+    return 'Heh, ini gambar apaan? Bukan struk belanjaan pokoknya...';
+  } catch (e) {
+    console.error('Failed to generate sassy comment:', e.message);
+    return 'Waduh, gambarnya aneh. Yang pasti ini bukan struk belanjaan deh!';
+  }
+}
+
 // Internal helpers for running queries. These functions abstract away
 // database differences between Postgres and SQLite.
 async function fetchOne(conn, sql, params) {
@@ -415,7 +479,7 @@ async function processNewMessages(conn, channelId) {
         if (receiptId) {
           processed++;
           // Acknowledge in channel
-          const ack = ` Noted (checkpoint #${active.id}) #${receiptId}: **${msg.author.username}** Rp${amount.toLocaleString('id-ID')}`;
+          const ack = `Oke, udah gue catat nih (checkpoint #${active.id}) #${receiptId}: **${msg.author.username}** Rp${amount.toLocaleString('id-ID')}`;
           await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
             method: 'POST',
             headers: {
@@ -427,6 +491,25 @@ async function processNewMessages(conn, channelId) {
         }
       } catch (e) {
         console.error(`Failed to process receipt ${imageUrl}:`, e.message);
+        // Generate a sassy comment when image is not a valid receipt
+        const sassyComment = await generateSassyComment(imageUrl);
+        try {
+          await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bot ${botToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+              content: sassyComment,
+              message_reference: {
+                message_id: msgId
+              }
+            })
+          });
+        } catch (replyErr) {
+          console.error('Failed to send sassy comment:', replyErr.message);
+        }
       }
     }
   }
@@ -438,6 +521,7 @@ module.exports = {
   isPostgres,
   verifyDiscordRequest,
   getTotalFromReceiptGemini,
+  generateSassyComment,
   getActiveCheckpoint,
   createCheckpoint,
   closeCheckpoint,
