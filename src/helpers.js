@@ -36,7 +36,10 @@ async function getDB() {
     
     // Ensure the containing directory exists
     try {
-      fs.mkdirSync(dbDir, { recursive: true });
+      // Try to create directory with explicit permissions
+      if (!fs.existsSync(dbDir)) {
+        fs.mkdirSync(dbDir, { recursive: true, mode: 0o755 });
+      }
       console.log(`Database directory: ${dbDir}`);
       
       // Test write permissions
@@ -51,10 +54,18 @@ async function getDB() {
     } catch (err) {
       console.error(`✗ Cannot write to database directory: ${dbDir}`);
       console.error(`Error: ${err.message}`);
-      console.error('\n🔧 Railway fix:');
-      console.error('  1. Create a volume mounted at /data');
-      console.error('  2. Set environment variable: DB_PATH=/data/receipts.db');
-      console.error('  3. Redeploy your service');
+      console.error('\n🔧 Railway fixes:');
+      console.error('  Option 1 (Recommended): Use PostgreSQL');
+      console.error('    - Add PostgreSQL plugin in Railway');
+      console.error('    - Railway auto-sets DATABASE_URL');
+      console.error('    - Run: npm run init-db-universal');
+      console.error('\n  Option 2: Fix volume permissions');
+      console.error('    - Railway volume mount path must match exactly');
+      console.error('    - If volume is at /data, set: DB_PATH=/data/receipts.db');
+      console.error('    - Check Railway docs for volume troubleshooting');
+      console.error('\n  Option 3: Use /tmp (not persistent!)');
+      console.error('    - Set: DB_PATH=/tmp/receipts.db');
+      console.error('    - WARNING: Data lost on restart');
       throw err;
     }
     

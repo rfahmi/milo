@@ -25,6 +25,10 @@ COPY . .
 # Ensure writable data directory
 RUN mkdir -p /usr/src/app/data && chown -R node:node /usr/src/app/data
 
+# If using Railway volume at /data, try to make it accessible
+# This runs as root before switching to node user
+RUN mkdir -p /data && chown -R node:node /data 2>/dev/null || true
+
 # Switch to non-root user for safety
 USER node
 
