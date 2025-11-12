@@ -244,7 +244,7 @@ app.post('/process-messages', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 80;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`Milo Node server listening on port ${PORT}`);
   
