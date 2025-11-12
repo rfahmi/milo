@@ -96,6 +96,7 @@ module.exports = {
       '- Kalau foto pemandangan: "Bagus pemandangannya, tapi gue kan lagi nungguin struk belanjaan"\n' +
       '- Kalau screenshot/meme: "Lucu sih, tapi ini bukan struk tau"\n' +
       '- Kalau foto random lain: sesuaikan dengan kreatif\n\n' +
+      '- Kalau ada foto orang kemungkinan itu foto babu kamu,kalo cewek Ose (Istri Fahmi), kalo cowo Fahmi (Suami Ose)\n\n' +
       'PENTING: Jangan bilang "saya" atau "aku", selalu pake "gue". Dan pastikan komentarnya nyambung sama isi gambarnya!'
   }
 };

@@ -13,6 +13,7 @@ const sqlite3 = require('sqlite3');
 const { Client } = require('pg');
 const fs = require('fs');
 const path = require('path');
+const sharp = require('sharp');
 const t = require('./translations');
 
 // Cache the database connection promise so that subsequent calls reuse
@@ -116,6 +117,41 @@ function verifyDiscordRequest(req) {
 }
 
 /**
+ * Resize and compress an image buffer to reduce token costs for Gemini API.
+ * Maintains aspect ratio and converts to JPEG with moderate compression.
+ * 
+ * @param {Buffer} buffer Original image buffer
+ * @param {number} maxWidth Maximum width in pixels (default: 1024)
+ * @returns {Promise<Buffer>} Compressed image buffer
+ */
+async function resizeImage(buffer, maxWidth = 1024) {
+  try {
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
+    
+    // Only resize if width exceeds maxWidth
+    if (metadata.width > maxWidth) {
+      return await image
+        .resize(maxWidth, null, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+    }
+    
+    // If already small enough, just convert to JPEG with compression
+    return await image
+      .jpeg({ quality: 80 })
+      .toBuffer();
+  } catch (err) {
+    console.error('Error resizing image:', err);
+    // Return original buffer if resize fails
+    return buffer;
+  }
+}
+
+/**
  * Call the Gemini API to extract the total amount from a shopping receipt
  * image. The API expects the image encoded as base64 and returns a
  * natural-language response containing the total. The function cleans
@@ -135,7 +171,11 @@ async function getTotalFromReceiptGemini(imageUrl) {
     throw new Error(`Failed to download image: ${imageUrl}`);
   }
   const buffer = await imgResp.buffer();
-  const imageBase64 = buffer.toString('base64');
+  
+  // Resize image to save tokens (max width 1024px)
+  const resizedBuffer = await resizeImage(buffer, 1024);
+  const imageBase64 = resizedBuffer.toString('base64');
+  
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const payload = {
     contents: [
@@ -214,7 +254,11 @@ async function generateSassyComment(imageUrl) {
       return t.receipts.imageDownloadFailed();
     }
     const buffer = await imgResp.buffer();
-    const imageBase64 = buffer.toString('base64');
+    
+    // Resize image to save tokens (max width 1024px)
+    const resizedBuffer = await resizeImage(buffer, 1024);
+    const imageBase64 = resizedBuffer.toString('base64');
+    
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const payload = {
       contents: [
@@ -532,6 +576,7 @@ module.exports = {
   getDB,
   isPostgres,
   verifyDiscordRequest,
+  resizeImage,
   getTotalFromReceiptGemini,
   generateSassyComment,
   getActiveCheckpoint,
