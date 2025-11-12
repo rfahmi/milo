@@ -9,6 +9,7 @@ const {
   getDB, 
   getActiveCheckpoint, 
   getTotalFromReceiptGemini,
+  generateSassyComment,
   addReceipt 
 } = require('./helpers');
 
@@ -69,17 +70,18 @@ async function processSingleMessage(message) {
 
       if (receiptId) {
         // Acknowledge in channel
-        const ack = `✅ Noted (checkpoint #${active.id}) #${receiptId}: **${message.author.username}** Rp${amount.toLocaleString('id-ID')}`;
+        const ack = `Oke, udah gue catat nih (checkpoint #${active.id}) #${receiptId}: **${message.author.username}** Rp${amount.toLocaleString('id-ID')}`;
         await message.channel.send(ack);
         console.log(`Receipt #${receiptId} processed: Rp${amount}`);
       }
     } catch (e) {
-      console.error(`Failed to process receipt ${imageUrl}:`, e.message);
-      // Optionally notify user of error
+      // Image is not a valid receipt, generate a sassy comment
+      console.log(`Not a receipt (${imageUrl}): ${e.message}`);
       try {
-        await message.channel.send(`❌ Failed to process receipt from **${message.author.username}**: ${e.message}`);
+        const sassyComment = await generateSassyComment(imageUrl);
+        await message.reply(sassyComment);
       } catch (sendErr) {
-        console.error('Failed to send error message:', sendErr);
+        console.error('Failed to send sassy comment:', sendErr);
       }
     }
   }
