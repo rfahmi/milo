@@ -143,10 +143,12 @@ async function getTotalFromReceiptGemini(imageUrl) {
           {
             text:
               'You are reading a shopping receipt (usually Indonesian, IDR). ' +
-              'Extract ONLY the grand total amount paid. ' +
+              'If this is NOT a receipt or you cannot find a clear total amount, respond with exactly: NOT_A_RECEIPT\n' +
+              'If this IS a receipt, extract ONLY the grand total amount paid. ' +
               'Return ONLY the number like 120500 (no currency, no extra text, no periods, no commas). ' +
               'If you see multiple numbers, return the LARGEST one (the grand total). ' +
-              'Examples: If total is Rp 125.000, return: 125000'
+              'Examples: If total is Rp 125.000, return: 125000\n' +
+              'If not a receipt or unclear, return: NOT_A_RECEIPT'
           },
           {
             inline_data: {
@@ -176,6 +178,12 @@ async function getTotalFromReceiptGemini(imageUrl) {
   if (!text) {
     throw new Error('Empty response from Gemini');
   }
+  
+  // Check if Gemini says it's not a receipt
+  if (text.trim().toUpperCase().includes('NOT_A_RECEIPT') || text.trim().toUpperCase() === 'NOT A RECEIPT') {
+    throw new Error('Image is not a valid receipt');
+  }
+  
   // Remove currency symbols, dots, commas and spaces
   const clean = text.replace(/[Rp\.,\s]/gi, '');
   const match = clean.match(/(\d+)/);
@@ -219,10 +227,17 @@ async function generateSassyComment(imageUrl) {
               text:
                 'Kamu adalah Milo, seekor kucing Persia jantan peliharaan yang bisa ngomong. ' +
                 'Sifatmu agak jutek tapi sebenarnya perhatian. ' +
-                'Tugasmu adalah ngecatat struk belanjaan, tapi user kirim gambar yang BUKAN struk belanjaan. ' +
-                'Komen gambar ini dengan gaya bahasa Indonesia informal yang jutek tapi lucu, maksimal 2 kalimat pendek. ' +
-                'Jangan terlalu kasar, tapi juga jangan terlalu ramah. Kayak kucing yang sedikit kesel tapi masih sayang. ' +
-                'Contoh: "Ini mah bukan struk, dasar...", "Heh, mana struk belanjanya? Ini apaan sih?", "Gue butuh struk, bukan foto selfie lu..."'
+                'Tugasmu adalah ngecatat struk belanjaan keluarga, tapi user kirim gambar yang BUKAN struk belanjaan. ' +
+                'Lihat gambar ini dan komen sesuai isinya dengan gaya bahasa Indonesia informal yang jutek tapi lucu. ' +
+                'Maksimal 2 kalimat pendek. Jangan terlalu kasar, tapi juga jangan ramah-ramah amat. ' +
+                'Kayak kucing yang sedikit kesel karena tugasnya terganggu, tapi masih sayang sama pemiliknya.\n\n' +
+                'Sesuaikan komenmu dengan isi gambar:\n' +
+                '- Kalau foto makanan/minuman: "Enak sih kayaknya... tapi mana struknya coba?"\n' +
+                '- Kalau foto selfie/orang: "Ganteng/cantik boleh, tapi gue butuh struk, bukan foto narsis"\n' +
+                '- Kalau foto pemandangan: "Bagus pemandangannya, tapi gue kan lagi nungguin struk belanjaan"\n' +
+                '- Kalau screenshot/meme: "Lucu sih, tapi ini bukan struk tau"\n' +
+                '- Kalau foto random lain: sesuaikan dengan kreatif\n\n' +
+                'PENTING: Jangan bilang "saya" atau "aku", selalu pake "gue". Dan pastikan komentarnya nyambung sama isi gambarnya!'
             },
             {
               inline_data: {
