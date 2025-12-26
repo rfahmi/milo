@@ -32,10 +32,21 @@ async function getDB() {
       return { type: 'postgres', client };
     }
     // SQLite fallback
-    const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'receipts.db');
+    let dbPath = process.env.DB_PATH;
+
+    if (!dbPath) {
+      // Check if /data/receipts.db exists (common volume mount point)
+      if (fs.existsSync('/data/receipts.db')) {
+        dbPath = '/data/receipts.db';
+      } else {
+        // Default to project-local data directory
+        dbPath = path.join(__dirname, '..', 'data', 'receipts.db');
+      }
+    }
+
     const dbDir = path.dirname(dbPath);
     console.log(`Using SQLite database at: ${dbPath}`);
-    
+
     // Ensure the containing directory exists
     try {
       // Try to create directory with explicit permissions
@@ -43,11 +54,11 @@ async function getDB() {
         fs.mkdirSync(dbDir, { recursive: true, mode: 0o755 });
       }
       console.log(`Database directory: ${dbDir}`);
-      
+
       // Test write permissions
       fs.accessSync(dbDir, fs.constants.W_OK);
       console.log('✓ Database directory is writable');
-      
+
       // Check if we can write to the db file itself (if it exists)
       if (fs.existsSync(dbPath)) {
         fs.accessSync(dbPath, fs.constants.W_OK);
@@ -70,7 +81,7 @@ async function getDB() {
       console.error('    - WARNING: Data lost on restart');
       throw err;
     }
-    
+
     const db = new sqlite3.Database(dbPath, (err) => {
       if (err) {
         console.error('SQLite connection error:', err.message);
@@ -128,7 +139,7 @@ async function resizeImage(buffer, maxWidth = 1024) {
   try {
     const image = sharp(buffer);
     const metadata = await image.metadata();
-    
+
     // Only resize if width exceeds maxWidth
     if (metadata.width > maxWidth) {
       return await image
@@ -139,7 +150,7 @@ async function resizeImage(buffer, maxWidth = 1024) {
         .jpeg({ quality: 80 })
         .toBuffer();
     }
-    
+
     // If already small enough, just convert to JPEG with compression
     return await image
       .jpeg({ quality: 80 })
@@ -171,11 +182,11 @@ async function getTotalFromReceiptGemini(imageUrl) {
     throw new Error(`Failed to download image: ${imageUrl}`);
   }
   const buffer = await imgResp.buffer();
-  
+
   // Resize image to save tokens (max width 1024px)
   const resizedBuffer = await resizeImage(buffer, 1024);
   const imageBase64 = resizedBuffer.toString('base64');
-  
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const payload = {
     contents: [
@@ -212,12 +223,12 @@ async function getTotalFromReceiptGemini(imageUrl) {
   if (!text) {
     throw new Error('Empty response from Gemini');
   }
-  
+
   // Check if Gemini says it's not a receipt
   if (text.trim().toUpperCase().includes('NOT_A_RECEIPT') || text.trim().toUpperCase() === 'NOT A RECEIPT') {
     throw new Error('Image is not a valid receipt');
   }
-  
+
   // Remove currency symbols, dots, commas and spaces
   const clean = text.replace(/[Rp\.,\s]/gi, '');
   const match = clean.match(/(\d+)/);
@@ -242,11 +253,11 @@ async function getTotalFromReceiptGemini(imageUrl) {
 async function generateSassyComment(imageUrl) {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-  
+
   if (!apiKey) {
     return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
   }
-  
+
   try {
     // Download the image into a Buffer
     const imgResp = await fetch(imageUrl);
@@ -254,11 +265,11 @@ async function generateSassyComment(imageUrl) {
       return t.receipts.imageDownloadFailed();
     }
     const buffer = await imgResp.buffer();
-    
+
     // Resize image to save tokens (max width 1024px)
     const resizedBuffer = await resizeImage(buffer, 1024);
     const imageBase64 = resizedBuffer.toString('base64');
-    
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
     const payload = {
       contents: [
@@ -277,30 +288,30 @@ async function generateSassyComment(imageUrl) {
         }
       ]
     };
-    
+
     console.log('Requesting sassy comment from Gemini...');
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    
+
     if (!resp.ok) {
       const errText = await resp.text();
       console.error('Gemini API error for sassy comment:', resp.status, errText);
-      
+
       // Return random fallback message
       return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
     }
-    
+
     const json = await resp.json();
-    
+
     const comment = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (comment && comment.trim().length > 0) {
       console.log('Generated sassy comment:', comment.trim());
       return comment.trim();
     }
-    
+
     console.log('Empty comment from Gemini, using fallback');
     return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
   } catch (e) {
@@ -556,7 +567,7 @@ async function processNewMessages(conn, channelId) {
               Authorization: `Bot ${botToken}`,
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               content: sassyComment,
               message_reference: {
                 message_id: msgId

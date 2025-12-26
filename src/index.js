@@ -198,7 +198,7 @@ app.get('/health', async (req, res) => {
   try {
     const conn = await getDB();
     const gatewayClient = require('./gateway').getClient();
-    
+
     const status = {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -206,19 +206,19 @@ app.get('/health', async (req, res) => {
       gateway: gatewayClient ? 'connected' : 'disconnected',
       database: conn.type
     };
-    
+
     return res.json(status);
   } catch (err) {
-    return res.status(500).json({ 
-      status: 'error', 
-      error: err.message 
+    return res.status(500).json({
+      status: 'error',
+      error: err.message
     });
   }
 });
 
 // Root endpoint
 app.get('/', (req, res) => {
-  res.json({ 
+  res.json({
     name: 'Milo Discord Bot',
     status: 'running',
     message: 'Discord receipt tracking bot is alive!'
@@ -231,14 +231,14 @@ app.post('/process-messages', async (req, res) => {
     if (!channelId) {
       return res.status(500).json({ error: 'DISCORD_CHANNEL_ID is not set' });
     }
-    
+
     const conn = await getDB();
     const result = await processNewMessages(conn, channelId);
-    
+
     if (result.error) {
       return res.status(500).json({ error: result.error });
     }
-    
+
     return res.json({
       success: true,
       processed: result.processed || 0,
@@ -251,10 +251,19 @@ app.post('/process-messages', async (req, res) => {
 });
 
 app.get('/download-db', (req, res) => {
-  // Use the path specified by the user or fallback to relative path
-  const dbPath = process.env.DB_PATH || '/usr/src/app/data/receipts.db';
-  const resolvedPath = path.isAbsolute(dbPath) 
-    ? dbPath 
+  // Determine path similar to helpers.js
+  let dbPath = process.env.DB_PATH;
+  if (!dbPath) {
+    const fs = require('fs');
+    if (fs.existsSync('/data/receipts.db')) {
+      dbPath = '/data/receipts.db';
+    } else {
+      dbPath = '/usr/src/app/data/receipts.db';
+    }
+  }
+
+  const resolvedPath = path.isAbsolute(dbPath)
+    ? dbPath
     : path.join(__dirname, '..', dbPath);
 
   res.download(resolvedPath, 'receipts.db', (err) => {
@@ -270,13 +279,13 @@ app.get('/download-db', (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`Milo Node server listening on port ${PORT}`);
-  
+
   // Register/update Discord commands on startup
   console.log('\n📋 Registering Discord commands...');
   try {
     const applicationId = process.env.DISCORD_APPLICATION_ID;
     const botToken = process.env.DISCORD_BOT_TOKEN;
-    
+
     if (applicationId && botToken) {
       await registerCommands(applicationId, botToken);
     } else {
@@ -286,7 +295,7 @@ app.listen(PORT, async () => {
     console.error('❌ Failed to register commands:', err.message);
     console.log('⚠️  Server will continue, but slash commands may not work properly');
   }
-  
+
   // Start Discord Gateway for real-time message processing
   console.log('\n🌐 Starting Discord Gateway...');
   startGateway();
