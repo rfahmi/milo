@@ -9,6 +9,7 @@ process.env.UNDICI_NO_WASM = '1';        // paksa Undici tanpa WASM
 process.env.NODE_OPTIONS = process.env.NODE_OPTIONS || '--max-old-space-size=256';
 
 const express = require('express');
+const path = require('path');
 const {
   verifyDiscordRequest,
   getDB,
@@ -247,6 +248,23 @@ app.post('/process-messages', async (req, res) => {
     console.error('Error processing messages:', err);
     return res.status(500).json({ error: 'Internal Server Error' });
   }
+});
+
+app.get('/download-db', (req, res) => {
+  // Use the path specified by the user or fallback to relative path
+  const dbPath = process.env.DB_PATH || '/usr/src/app/data/receipts.db';
+  const resolvedPath = path.isAbsolute(dbPath) 
+    ? dbPath 
+    : path.join(__dirname, '..', dbPath);
+
+  res.download(resolvedPath, 'receipts.db', (err) => {
+    if (err) {
+      console.error('Error downloading DB:', err);
+      if (!res.headersSent) {
+        res.status(500).send('Error downloading file: ' + err.message);
+      }
+    }
+  });
 });
 
 const PORT = process.env.PORT || 3000;
