@@ -33,6 +33,11 @@ module.exports = {
                     option.setName('database_file')
                         .setDescription('File .db untuk direstore')
                         .setRequired(true))
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('refresh-names')
+                .setDescription('Update semua nama user di database sesuai display name Discord saat ini.')
         ),
     async execute(interaction) {
         console.log('[DEBUG] Admin command triggered');
@@ -130,6 +135,39 @@ module.exports = {
                 await interaction.editReply({
                     content: `❌ Restore failed: ${error.message}. You may need to manually restart the bot.`
                 });
+            }
+        } else if (subcommand === 'refresh-names') {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                // 1. Get all unique user IDs from DB
+                const users = await db.all('SELECT DISTINCT user_id FROM receipts');
+                let updatedCount = 0;
+                let errorCount = 0;
+
+                for (const user of users) {
+                    try {
+                        const member = await interaction.guild.members.fetch(user.user_id);
+                        const newName = member.displayName;
+
+                        // 2. Update all receipts for this user
+                        await db.run(
+                            'UPDATE receipts SET user_name = ? WHERE user_id = ?',
+                            [newName, user.user_id]
+                        );
+                        updatedCount++;
+                    } catch (e) {
+                        console.error(`Failed to fetch/update user ${user.user_id}:`, e.message);
+                        errorCount++;
+                    }
+                }
+
+                await interaction.editReply({
+                    content: `✅ Names refreshed.\nUpdated: ${updatedCount} users.\nFailed/Left: ${errorCount} users.`
+                });
+            } catch (error) {
+                console.error('Refresh names failed:', error);
+                await interaction.editReply({ content: `❌ Failed: ${error.message}` });
             }
         }
     },
