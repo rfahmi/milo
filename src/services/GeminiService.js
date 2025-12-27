@@ -198,6 +198,39 @@ class GeminiService {
         return { intent: 'CHAT', response: 'Lagi rame banget nih, otak aku ngebul. Coba bentar lagi ya.' };
     }
 
+    async healthCheck() {
+        if (!this.apiKey) return { status: 'CONFIG_ERROR', message: 'API Key missing' };
+
+        const start = Date.now();
+        const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
+        const payload = {
+            contents: [{ parts: [{ text: "ping" }] }]
+        };
+
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const latency = Date.now() - start;
+
+            if (resp.status === 429 || resp.status === '429') {
+                return { status: 'RATE_LIMITED', latency, message: '429 Too Many Requests' };
+            }
+
+            if (!resp.ok) {
+                return { status: 'DOWN', latency, message: `HTTP ${resp.status}` };
+            }
+
+            return { status: 'UP', latency, message: 'OK' };
+
+        } catch (e) {
+            return { status: 'ERROR', latency: Date.now() - start, message: e.message };
+        }
+    }
+
     getRandomFallback() {
         return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
     }

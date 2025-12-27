@@ -4,6 +4,7 @@ const config = require('../config');
 const fs = require('fs');
 const path = require('path');
 const fetch = require('node-fetch');
+const geminiService = require('../services/GeminiService');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -73,7 +74,20 @@ module.exports = {
         } else if (subcommand === 'ping') {
             const sent = await interaction.reply({ content: 'Pinging...', fetchReply: true, ephemeral: true });
             const latency = sent.createdTimestamp - interaction.createdTimestamp;
-            await interaction.editReply(`🏓 Pong! Latency: ${latency}ms. API Latency: ${Math.round(interaction.client.ws.ping)}ms.`);
+            const wsLatency = Math.round(interaction.client.ws.ping);
+
+            const geminiHealth = await geminiService.healthCheck();
+            let geminiStatusIcon = '✅';
+            if (geminiHealth.status === 'DOWN') geminiStatusIcon = '❌';
+            if (geminiHealth.status === 'RATE_LIMITED') geminiStatusIcon = '⚠️';
+            if (geminiHealth.status === 'ERROR') geminiStatusIcon = '⁉️';
+
+            await interaction.editReply({
+                content: `🏓 **Pong!**\n` +
+                    `- Bot Latency: **${latency}ms**\n` +
+                    `- Gateway Latency: **${wsLatency}ms**\n` +
+                    `- Gemini API: ${geminiStatusIcon} **${geminiHealth.status}** (${geminiHealth.latency}ms) - ${geminiHealth.message}`
+            });
         } else if (subcommand === 'backup') {
             await interaction.deferReply({ ephemeral: true });
 
