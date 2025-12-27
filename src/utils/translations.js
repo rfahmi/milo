@@ -12,7 +12,7 @@ module.exports = {
                 `Checkpoint **#${checkpointId}** masih jalan. Jangan ribut. Pake /end dulu.`,
 
             success: (checkpointId) =>
-                `Oke. Gue catat.\nCheckpoint **#${checkpointId}** mulai.\nKirim struknya.`
+                `Oke. Aku catat.\nCheckpoint **#${checkpointId}** mulai.\nKirim struknya.`
         },
 
         end: {
@@ -20,7 +20,7 @@ module.exports = {
                 `Belum ada apa-apa.\nPake /start dulu.`,
 
             noReceipts: (checkpointId) =>
-                `Checkpoint **#${checkpointId}** gue tutup.\nStruk kosong. Hadeh.`,
+                `Checkpoint **#${checkpointId}** aku tutup.\nStruk kosong. Hadeh.`,
 
             success: (checkpointId, details, grandTotal) =>
                 `Selesai.\nCheckpoint **#${checkpointId}** ditutup.\n${details}\n\nTotal: Rp${grandTotal}`
@@ -42,11 +42,11 @@ module.exports = {
                 `Gak ada yang dihapus.\nKosong.`,
 
             success: (checkpointId) =>
-                `Checkpoint **#${checkpointId}** gue hapus.\nAnggep gak pernah ada.`
+                `Checkpoint **#${checkpointId}** aku hapus.\nAnggep gak pernah ada.`
         },
 
         unknown: () =>
-            `Apaan itu.\nGue gak ngerti.`
+            `Apaan itu.\nAku gak ngerti.`
     },
 
     // Receipt processing responses
@@ -72,8 +72,8 @@ module.exports = {
     summary: {
         receiptBreakdown: '**Rincian Struk:**',
         userTotals: '**Siapa Ngabisin Berapa:**',
-        receiptLine: (num, username, amount) =>
-            `${num}. ${username}: Rp${amount}`,
+        receiptLine: (num, username, amount, desc) =>
+            `${num}. ${username}: Rp${amount}${desc ? ` (${desc})` : ''}`,
         userLine: (username, total) =>
             `- **${username}**: Rp${total}`
     },
@@ -154,6 +154,37 @@ module.exports = {
                 - Jangan lebih dari 2 kalimat.
 
                 Selalu jawab sebagai Milo.
-                `
+                `,
+
+        textAnalysis:
+            `You are Milo, a smart receipt assistant.
+            Analyze the user's input/chat history to determine intent.
+            
+            Current Date: ${new Date().toLocaleDateString('id-ID')}
+            
+            Intents:
+            1. "RECEIPT": User is explicitly submitting an expense (e.g., "beli baso 15rb", "15k", "20.000").
+            2. "CHAT": User is just chatting or asking something unrelated to receipts.
+
+            Extraction Rules for RECEIPT:
+            - "amount": Extract numeric value (e.g. 15rb -> 15000).
+            - "item": Extract item description if present (e.g. "beli baso").
+            - If "amount" is present but "item" is missing/unclear -> Set "item": null.
+
+            Response Rules:
+            - If intent is RECEIPT:
+              - If item is missing (null): Provide a short, sassy question asking for details (e.g., "Buat apa nih 15rb?", "Ini duit buat apaan?").
+              - If complete: Provide a standard acknowledgement (e.g., "Oke.", "Sip.").
+            - If intent is CHAT:
+              - Reply in character as Milo (Persian cat, sassy, jutek but secretly caring).
+              - Keep it short (max 2 sentences).
+            
+            Output JSON ONLY:
+            {
+                "intent": "RECEIPT" | "CHAT",
+                "amount": number | null,
+                "item": string | null,
+                "response": "string"
+            }`
     }
 };

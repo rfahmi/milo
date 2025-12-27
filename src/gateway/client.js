@@ -76,7 +76,23 @@ class DiscordClient {
             }
 
             if (message.attachments.size === 0) {
-                // console.log('[DEBUG] No attachments found.');
+                try {
+                    // Fetch history (limit 11 to get last 10 previous messages + current)
+                    const history = await message.channel.messages.fetch({ limit: 11 });
+
+                    // Convert Collection to Array, reverse to chronological, filter out current & bots
+                    const historyArray = Array.from(history.values())
+                        .reverse()
+                        .filter(m => m.id !== message.id && !m.author.bot);
+
+                    const response = await receiptService.processText(message, message.channelId, historyArray);
+
+                    if (response) {
+                        await message.reply(response);
+                    }
+                } catch (error) {
+                    console.error('[DEBUG] Error processing text:', error);
+                }
                 return;
             }
 

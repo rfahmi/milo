@@ -53,10 +53,22 @@ function close() {
     });
 }
 
+// Promisified helpers
+function run(sql, params = []) {
+    const db = getDb();
+    return new Promise((resolve, reject) => {
+        db.run(sql, params, function (err) {
+            if (err) reject(err);
+            else resolve({ lastID: this.lastID, changes: this.changes });
+        });
+    });
+}
+
 function initSchema() {
     const db = getDb();
 
     db.serialize(() => {
+        // ... (previous CREATE tables) ...
         db.run(`
       CREATE TABLE IF NOT EXISTS checkpoints (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,10 +90,20 @@ function initSchema() {
         message_id TEXT,
         image_url TEXT,
         amount REAL NOT NULL,
+        description TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY(checkpoint_id) REFERENCES checkpoints(id)
       )
     `);
+
+        // Migration: Ensure 'description' column exists for existing tables
+        // Simple "try add" approach
+        db.run("ALTER TABLE receipts ADD COLUMN description TEXT", (err) => {
+            // Ignore error if column already exists
+            if (err && !err.message.includes('duplicate column name')) {
+                console.log('Migration note:', err.message);
+            }
+        });
 
         db.run(`
       CREATE TABLE IF NOT EXISTS channel_state (
@@ -89,20 +111,20 @@ function initSchema() {
         last_message_id TEXT
       )
     `);
+
+        db.run(`
+      CREATE TABLE IF NOT EXISTS conversation_states (
+         user_id TEXT NOT NULL,
+         channel_id TEXT NOT NULL,
+         state TEXT NOT NULL,
+         data TEXT,
+         updated_at TEXT NOT NULL,
+         PRIMARY KEY (user_id, channel_id)
+      )
+    `);
     });
 
     console.log('Database schema initialized.');
-}
-
-// Promisified helpers
-function run(sql, params = []) {
-    const db = getDb();
-    return new Promise((resolve, reject) => {
-        db.run(sql, params, function (err) {
-            if (err) reject(err);
-            else resolve({ lastID: this.lastID, changes: this.changes });
-        });
-    });
 }
 
 function get(sql, params = []) {

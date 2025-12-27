@@ -28,7 +28,7 @@ class ReceiptRepository {
 
     async addReceipt(data) {
         const result = await db.run(
-            'INSERT OR IGNORE INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, created_at) VALUES (?,?,?,?,?,?,?,?)',
+            'INSERT OR IGNORE INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, description, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
             [
                 data.user_id,
                 data.user_name,
@@ -37,6 +37,7 @@ class ReceiptRepository {
                 data.message_id,
                 data.image_url,
                 data.amount,
+                data.description || null, // Handle description
                 data.created_at
             ]
         );
@@ -45,7 +46,7 @@ class ReceiptRepository {
 
     async getReceiptsForCheckpoint(checkpointId) {
         return await db.all(
-            'SELECT user_id, user_name, amount, created_at, message_id FROM receipts WHERE checkpoint_id = ? ORDER BY created_at ASC',
+            'SELECT user_id, user_name, amount, description, created_at, message_id FROM receipts WHERE checkpoint_id = ? ORDER BY created_at ASC',
             [checkpointId]
         );
     }

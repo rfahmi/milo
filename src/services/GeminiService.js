@@ -137,6 +137,67 @@ class GeminiService {
         }
     }
 
+    async analyzeText(text, history) {
+        if (!this.apiKey) return { intent: 'CHAT', response: 'Gapunya API Key woy.' };
+
+        const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
+
+        // Format history
+        const context = history.map(msg => `User (${msg.author.username}): ${msg.content}`).join('\n');
+        const prompt = `${t.gemini.textAnalysis}\n\nChat History:\n${context}\n\nCurrent Input: ${text}`;
+
+        const payload = {
+            contents: [{
+                parts: [{ text: prompt }]
+            }]
+        };
+
+        const maxRetries = 3;
+        let retryCount = 0;
+        let delay = 2000; // Start with 2 seconds
+
+        while (retryCount <= maxRetries) {
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (resp.status === 429 || resp.status === '429') {
+                    console.warn(`[GeminiService] Rate limit hit (429). Retrying in ${delay}ms... (Attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    retryCount++;
+                    delay *= 2; // Exponential backoff
+                    continue;
+                }
+
+                if (!resp.ok) {
+                    console.error('Gemini API error (analyzeText):', resp.status);
+                    return { intent: 'CHAT', response: 'Lagi error nih otak aku.' };
+                }
+
+                const json = await resp.json();
+                let rawText = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+                rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+
+                try {
+                    return JSON.parse(rawText);
+                } catch (e) {
+                    console.error('Failed to parse JSON from Gemini:', rawText);
+                    return { intent: 'CHAT', response: rawText || 'Hah?' };
+                }
+
+            } catch (e) {
+                console.error('analyzeText exception:', e);
+                return { intent: 'CHAT', response: 'Lagi pusing aku.' };
+            }
+        }
+
+        return { intent: 'CHAT', response: 'Lagi rame banget nih, otak aku ngebul. Coba bentar lagi ya.' };
+    }
+
     getRandomFallback() {
         return t.receipts.notReceipt[Math.floor(Math.random() * t.receipts.notReceipt.length)];
     }
