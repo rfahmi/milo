@@ -35,6 +35,24 @@ function getDb() {
     return dbInstance;
 }
 
+function close() {
+    return new Promise((resolve, reject) => {
+        if (!dbInstance) return resolve();
+
+        console.log('Closing SQLite connection...');
+        dbInstance.close((err) => {
+            if (err) {
+                console.error('Error closing database:', err.message);
+                reject(err);
+            } else {
+                console.log('Database connection closed.');
+                dbInstance = null; // Reset singleton
+                resolve();
+            }
+        });
+    });
+}
+
 function initSchema() {
     const db = getDb();
 
@@ -112,5 +130,7 @@ module.exports = {
     initSchema,
     run,
     get,
+    get,
     all,
+    close,
 };

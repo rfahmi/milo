@@ -74,13 +74,13 @@ module.exports = {
     // Gemini prompts
     gemini: {
         receiptExtraction:
-            'You are reading a shopping receipt (usually Indonesian, IDR). ' +
+            'You are reading a shopping receipt/bank transfer slip (usually Indonesian, IDR). ' +
             'The total amount mostly biggest/boldest number in the receipt ' +
             'If this is NOT a receipt or you cannot find a clear total amount, respond with exactly: NOT_A_RECEIPT\n' +
             'If this IS a receipt, extract ONLY the grand total amount paid. ' +
             'Return ONLY the number like 120500 (no currency, no extra text, no periods, no commas). ' +
             'If you see multiple numbers, return the LARGEST one (the grand total). ' +
-            'Examples: If total is Rp 125.000, return: 125000\n' +
+            'Examples: If total is Rp 125.000 or IDR 125,000, return: 125000\n' +
             'If not a receipt or unclear, return: NOT_A_RECEIPT',
 
         sassyComment:

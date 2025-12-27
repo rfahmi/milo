@@ -3,6 +3,7 @@ const db = require('../data/db');
 const config = require('../config');
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -23,6 +24,15 @@ module.exports = {
             subcommand
                 .setName('backup')
                 .setDescription('Unduh backup database.')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('restore')
+                .setDescription('Upload dan restore database (timpa yang ada).')
+                .addAttachmentOption(option =>
+                    option.setName('database_file')
+                        .setDescription('File .db untuk direstore')
+                        .setRequired(true))
         ),
     async execute(interaction) {
         console.log('[DEBUG] Admin command triggered');
@@ -78,6 +88,49 @@ module.exports = {
                 content: '✅ Database backup ready.',
                 files: [attachment]
             });
+        } else if (subcommand === 'restore') {
+            const attach = interaction.options.getAttachment('database_file');
+
+            if (!attach) {
+                return interaction.reply({ content: '❌ Please attach a database file.', ephemeral: true });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const dbPath = config.db.path;
+                const dbDir = path.dirname(dbPath);
+                const shmPath = `${dbPath}-shm`;
+                const walPath = `${dbPath}-wal`;
+
+                // 1. Close existing connection
+                await db.close();
+
+                // 2. Download valid file
+                const response = await fetch(attach.url);
+                if (!response.ok) throw new Error('Failed to download file.');
+                const buffer = await response.buffer();
+
+                // 3. Delete WAL/SHM files to prevent corruption
+                if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+                if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+
+                // 4. Overwrite DB file
+                fs.writeFileSync(dbPath, buffer);
+
+                // 5. Re-init schema (just to verify connection works and ensure schema is valid)
+                db.initSchema();
+
+                await interaction.editReply({
+                    content: `✅ Database restored successfully from \`${attach.name}\`. Connection re-established.`
+                });
+
+            } catch (error) {
+                console.error('Restore failed:', error);
+                await interaction.editReply({
+                    content: `❌ Restore failed: ${error.message}. You may need to manually restart the bot.`
+                });
+            }
         }
     },
 };
