@@ -45,14 +45,15 @@ class ReceiptRepository {
 
     async getReceiptsForCheckpoint(checkpointId) {
         return await db.all(
-            'SELECT user_name, amount, created_at, message_id FROM receipts WHERE checkpoint_id = ? ORDER BY created_at ASC',
+            'SELECT user_id, user_name, amount, created_at, message_id FROM receipts WHERE checkpoint_id = ? ORDER BY created_at ASC',
             [checkpointId]
         );
     }
 
     async getCheckpointSummary(checkpointId) {
+        // Group by user_id only to avoid splitting if name changes. MAX(user_name) picks the latest/lexicographical name.
         return await db.all(
-            'SELECT user_name, user_id, SUM(amount) AS total FROM receipts WHERE checkpoint_id = ? GROUP BY user_id, user_name ORDER BY total DESC',
+            'SELECT MAX(user_name) as user_name, user_id, SUM(amount) AS total FROM receipts WHERE checkpoint_id = ? GROUP BY user_id ORDER BY total DESC',
             [checkpointId]
         );
     }

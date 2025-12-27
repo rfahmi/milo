@@ -19,13 +19,13 @@ class ReceiptService {
         }
 
         await receiptRepo.closeCheckpoint(active.id, messageId);
-        const summary = await receiptRepo.getCheckpointSummary(active.id);
         const receipts = await receiptRepo.getReceiptsForCheckpoint(active.id);
 
         if (receipts.length === 0) {
             return { success: true, message: t.commands.end.noReceipts(active.id) };
         }
 
+        const summary = this.calculateSummary(receipts);
         const { details, grandTotal } = this.formatSummary(summary, receipts);
         return { success: true, message: t.commands.end.success(active.id, details, grandTotal.toLocaleString('id-ID')) };
     }
@@ -36,15 +36,29 @@ class ReceiptService {
             return { success: false, message: t.commands.status.noCheckpoint() };
         }
 
-        const summary = await receiptRepo.getCheckpointSummary(active.id);
         const receipts = await receiptRepo.getReceiptsForCheckpoint(active.id);
 
         if (receipts.length === 0) {
             return { success: true, message: t.commands.status.noReceipts(active.id) };
         }
 
+        const summary = this.calculateSummary(receipts);
         const { details, grandTotal } = this.formatSummary(summary, receipts);
         return { success: true, message: t.commands.status.running(active.id, details, grandTotal.toLocaleString('id-ID')) };
+    }
+
+    calculateSummary(receipts) {
+        const userMap = new Map();
+
+        // Receipts are ordered by created_at ASC, so later receipts overwrite the name
+        for (const r of receipts) {
+            const current = userMap.get(r.user_id) || { total: 0, user_name: r.user_name, user_id: r.user_id };
+            current.total += r.amount;
+            current.user_name = r.user_name; // Always update to latest name
+            userMap.set(r.user_id, current);
+        }
+
+        return Array.from(userMap.values()).sort((a, b) => b.total - a.total);
     }
 
     async undo(channelId) {
@@ -88,7 +102,7 @@ class ReceiptService {
             const amount = await geminiService.extractTotal(att.url);
             const receiptId = await receiptRepo.addReceipt({
                 user_id: msg.author.id,
-                user_name: msg.author.username,
+                user_name: msg.member?.displayName || msg.author.username,
                 channel_id: channelId,
                 checkpoint_id: active.id,
                 message_id: msg.id,

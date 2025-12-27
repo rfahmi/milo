@@ -65,7 +65,7 @@ class DiscordClient {
 
         this.client.on(Events.MessageCreate, async message => {
             // Log every message in the channel (or attempt to) to see if we get events
-            // console.log(`[DEBUG] Message received from ${message.author.username} in ${message.channelId}`);
+            console.log(`[DEBUG] Message received from ${message.member.displayName} in ${message.channelId}`);
 
             if (message.author.bot) return;
 
