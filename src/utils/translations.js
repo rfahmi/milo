@@ -75,6 +75,7 @@ module.exports = {
     gemini: {
         receiptExtraction:
             'You are reading a shopping receipt (usually Indonesian, IDR). ' +
+            'The total amount mostly biggest/boldest number in the receipt ' +
             'If this is NOT a receipt or you cannot find a clear total amount, respond with exactly: NOT_A_RECEIPT\n' +
             'If this IS a receipt, extract ONLY the grand total amount paid. ' +
             'Return ONLY the number like 120500 (no currency, no extra text, no periods, no commas). ' +

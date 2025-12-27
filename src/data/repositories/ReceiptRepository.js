@@ -11,10 +11,11 @@ class ReceiptRepository {
 
     async createCheckpoint(channelId, startMessageId) {
         const createdAt = new Date().toISOString();
-        return await db.run(
+        const result = await db.run(
             'INSERT INTO checkpoints (channel_id, created_at, start_message_id) VALUES (?,?,?)',
             [channelId, createdAt, startMessageId]
         );
+        return result.lastID;
     }
 
     async closeCheckpoint(checkpointId, endMessageId) {
@@ -26,7 +27,7 @@ class ReceiptRepository {
     }
 
     async addReceipt(data) {
-        return await db.run(
+        const result = await db.run(
             'INSERT OR IGNORE INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, created_at) VALUES (?,?,?,?,?,?,?,?)',
             [
                 data.user_id,
@@ -39,6 +40,7 @@ class ReceiptRepository {
                 data.created_at
             ]
         );
+        return result.lastID;
     }
 
     async getReceiptsForCheckpoint(checkpointId) {
