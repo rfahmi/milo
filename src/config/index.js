@@ -12,14 +12,19 @@ function validateEnv() {
 }
 
 // Ensure database path
+// Ensure database path
 let dbPath = process.env.DB_PATH;
 if (!dbPath) {
-    if (fs.existsSync('/data')) {
+    // Prioritize local data directory if it exists (Fix for Windows dev environment)
+    const localDataPath = path.join(__dirname, '../../data');
+    if (fs.existsSync(localDataPath)) {
+        dbPath = path.join(localDataPath, 'receipts.db');
+    } else if (fs.existsSync('/data')) {
         // Railway / Docker volume
         dbPath = '/data/receipts.db';
     } else {
-        // Local dev fallback
-        dbPath = path.join(__dirname, '../../data/receipts.db');
+        // Fallback create local
+        dbPath = path.join(localDataPath, 'receipts.db');
     }
 }
 

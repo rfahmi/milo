@@ -37,6 +37,7 @@ class DiscordClient {
         });
 
         this.client.on(Events.InteractionCreate, async interaction => {
+            // console.log(interaction);
             if (!interaction.isChatInputCommand()) return;
 
             // Enforce Channel Restriction if configured
@@ -63,24 +64,49 @@ class DiscordClient {
         });
 
         this.client.on(Events.MessageCreate, async message => {
+            // Log every message in the channel (or attempt to) to see if we get events
+            // console.log(`[DEBUG] Message received from ${message.author.username} in ${message.channelId}`);
+
             if (message.author.bot) return;
-            if (message.channelId !== config.discord.channelId) return;
-            if (message.attachments.size === 0) return;
+
+            // Check channel ID mismatch with logging
+            if (config.discord.channelId && message.channelId !== config.discord.channelId) {
+                // console.log(`[DEBUG] Ignoring message from channel ${message.channelId} (Expected: ${config.discord.channelId})`);
+                return;
+            }
+
+            if (message.attachments.size === 0) {
+                // console.log('[DEBUG] No attachments found.');
+                return;
+            }
+
+            // console.log(`[DEBUG] Processing potential receipt from ${message.author.username}`);
 
             for (const [, attachment] of message.attachments) {
-                if (!attachment.contentType?.startsWith('image/')) continue;
+                // console.log(`[DEBUG] Attachment content type: ${attachment.contentType}`);
+
+                if (!attachment.contentType?.startsWith('image/')) {
+                    // console.log(`[DEBUG] Skipping non-image attachment: ${attachment.contentType}`);
+                    continue;
+                }
 
                 try {
+                    console.log('[DEBUG] Calling receiptService.processAttachment...');
                     const result = await receiptService.processAttachment(attachment, message, message.channelId);
+
+                    console.log('[DEBUG] Result from processAttachment:', result);
+
                     if (result) {
                         if (typeof result === 'string') {
                             await message.channel.send(result);
                         } else if (result.reference) {
                             await message.reply(result.reply);
                         }
+                    } else {
+                        console.log('[DEBUG] processAttachment returned null (likely no active checkpoint or not a receipt)');
                     }
                 } catch (error) {
-                    console.error('Error processing attachment:', error);
+                    console.error('[DEBUG] Error processing attachment:', error);
                 }
             }
         });

@@ -2,9 +2,10 @@ const db = require('../db');
 
 class ReceiptRepository {
     async getActiveCheckpoint(channelId) {
+        // Relaxed constraint: Get the latest open checkpoint regardless of channel_id.
+        // This allows moving the DB between channels (e.g. prod -> sandbox) seamlessly.
         return await db.get(
-            'SELECT * FROM checkpoints WHERE channel_id = ? AND closed_at IS NULL ORDER BY id DESC LIMIT 1',
-            [channelId]
+            'SELECT * FROM checkpoints WHERE closed_at IS NULL ORDER BY id DESC LIMIT 1'
         );
     }
 
@@ -55,9 +56,9 @@ class ReceiptRepository {
     }
 
     async getLatestCheckpoint(channelId) {
+        // Relaxed constraint for portability
         return await db.get(
-            'SELECT * FROM checkpoints WHERE channel_id = ? ORDER BY id DESC LIMIT 1',
-            [channelId]
+            'SELECT * FROM checkpoints ORDER BY id DESC LIMIT 1'
         );
     }
 
