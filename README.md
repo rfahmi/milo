@@ -1,5 +1,4 @@
-# Milo (Node.js version)
-
+# Milo
 Milo is a tiny Discord bot to help you and your family track shared
 expenses from receipt screenshots. This repository contains a
 feature‑equivalent reimplementation of the original PHP project in
