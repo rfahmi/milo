@@ -1,5 +1,4 @@
-/data/receipts.db
-/data/*.sqlite
+/data/*.db*
 /vendor/
 .env
 node_modules
