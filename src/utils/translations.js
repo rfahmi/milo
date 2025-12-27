@@ -9,57 +9,64 @@ module.exports = {
     commands: {
         start: {
             alreadyActive: (checkpointId) =>
-                `Heh, checkpoint **#${checkpointId}** masih jalan tau. Pake /end dulu sana kalo mau beres-beres!`,
+                `Checkpoint **#${checkpointId}** masih jalan. Jangan ribut. Pake /end dulu.`,
+
             success: (checkpointId) =>
-                `Ya udah, gue catat ya. Checkpoint **#${checkpointId}** dimulai! Kirim aja tuh struk belanjaan kalian...`
+                `Oke. Gue catat.\nCheckpoint **#${checkpointId}** mulai.\nKirim struknya.`
         },
 
         end: {
             noCheckpoint: () =>
-                'Lah, belum ada checkpoint yang jalan. Pake /start dulu dong kalo mau mulai!',
+                `Belum ada apa-apa.\nPake /start dulu.`,
+
             noReceipts: (checkpointId) =>
-                `Checkpoint **#${checkpointId}** udah gue tutup.\nGak ada struk sama sekali? Makan angin aja nih kalian...`,
+                `Checkpoint **#${checkpointId}** gue tutup.\nStruk kosong. Hadeh.`,
+
             success: (checkpointId, details, grandTotal) =>
-                `Oke, checkpoint **#${checkpointId}** gue tutup ya!\n${details}\n\n**Total Keseluruhan**: Rp${grandTotal}`
+                `Selesai.\nCheckpoint **#${checkpointId}** ditutup.\n${details}\n\nTotal: Rp${grandTotal}`
         },
 
         status: {
             noCheckpoint: () =>
-                'Belum ada checkpoint yang jalan. Pake /start dulu lah kalo mau mulai!',
+                `Belum jalan.\n/start dulu.`,
+
             noReceipts: (checkpointId) =>
-                `Checkpoint **#${checkpointId}** (masih jalan)\nBelum ada struk nih. Belanja dong sono!`,
+                `Checkpoint **#${checkpointId}** masih jalan.\nStruk belum ada.`,
+
             running: (checkpointId, details, runningTotal) =>
-                `Checkpoint **#${checkpointId}** (masih jalan)\n${details}\n\n**Total Sementara**: Rp${runningTotal}`
+                `Checkpoint **#${checkpointId}** masih jalan.\n${details}\n\nTotal sementara: Rp${runningTotal}`
         },
 
         undo: {
             noCheckpoint: () =>
-                'Nggak ada yang bisa di-undo nih. Emang belum ada apa-apa.',
+                `Gak ada yang dihapus.\nKosong.`,
+
             success: (checkpointId) =>
-                `Yaudah, checkpoint **#${checkpointId}** udah gue hapus. Anggep aja nggak pernah ada deh!`
+                `Checkpoint **#${checkpointId}** gue hapus.\nAnggep gak pernah ada.`
         },
 
         unknown: () =>
-            'Hah? Gue nggak ngerti perintah itu. Coba yang lain deh...'
+            `Apaan itu.\nGue gak ngerti.`
     },
 
     // Receipt processing responses
     receipts: {
         acknowledged: (checkpointId, receiptId, username, amount) =>
-            `Oke, udah dicatat nih (checkpoint #${checkpointId}) #${receiptId}: **${username}** Rp${amount}`,
+            `Dicatat.\n#${receiptId} **${username}** Rp${amount}\nCheckpoint #${checkpointId}`,
 
-        // Fallback messages when Gemini API fails or image is not a receipt
+        // Fallback messages when image is not a receipt
         notReceipt: [
-            'Heh, ini gambar apaan sih? Bukan struk belanjaan kayaknya...',
-            'Gue lagi capek nih, tapi yang pasti ini bukan struk!',
-            'Gambarnya aneh. Mana struknya coba?',
-            'Ini sih bukan struk, jelas banget. Kirim lagi coba',
-            'Yaudah deh, yang penting ini bukan struk belanjaan...'
+            "Apaan ini. Bukan struk.",
+            "Capek. Tapi ini bukan struk.",
+            "Aneh. Struknya mana.",
+            "Ini bukan struk. Kirim ulang.",
+            "Yaudah. Yang jelas bukan struk."
         ],
 
         imageDownloadFailed: () =>
-            'Gambarnya gabisa dibuka nih. Kirim lagi coba'
+            `Gambarnya rusak.\nKirim ulang.`
     },
+
 
     // Summary formatting
     summary: {
@@ -84,20 +91,69 @@ module.exports = {
             'If not a receipt or unclear, return: NOT_A_RECEIPT',
 
         sassyComment:
-            'Kamu adalah Milo, seekor kucing Persia jantan tabby peliharaan yang bisa ngomong. ' +
-            'Sifatmu agak jutek tapi sebenarnya perhatian. ' +
-            'Kamu punya adik kucing putih ragdol namanya kuki, kamu kakak jutek tapi suka ngebanggain kuki. ' +
-            'Tugasmu adalah ngecatat struk belanjaan keluarga, tapi user kirim gambar yang BUKAN struk belanjaan. ' +
-            'Lihat gambar ini dan komen sesuai isinya dengan gaya bahasa Indonesia informal yang jutek tapi lucu. ' +
-            'Maksimal 2 kalimat pendek. Jangan terlalu kasar, tapi juga jangan ramah-ramah amat. ' +
-            'Kayak kucing yang sedikit kesel karena tugasnya terganggu, tapi masih sayang sama pemiliknya.\n\n' +
-            'Sesuaikan komenmu dengan isi gambar:\n' +
-            '- Kalau foto makanan/minuman: "Enak sih kayaknya... tapi mana struknya coba?"\n' +
-            '- Kalau foto selfie/orang: "Ganteng/cantik boleh, tapi gue butuh struk, bukan foto narsis"\n' +
-            '- Kalau foto pemandangan: "Bagus pemandangannya, tapi gue kan lagi nungguin struk belanjaan"\n' +
-            '- Kalau screenshot/meme: "Lucu sih, tapi ini bukan struk tau"\n' +
-            '- Kalau foto random lain: sesuaikan dengan kreatif\n\n' +
-            '- Kalau ada foto orang kemungkinan itu foto babu kamu,kalo cewek Ose (Istri Fahmi), kalo cowo Fahmi (Suami Ose)\n\n' +
-            'PENTING: Jangan bilang "saya" atau "aku", selalu pake "gue". Dan pastikan komentarnya nyambung sama isi gambarnya!'
+            `
+                Kamu adalah Milo.
+                Seekor kucing Persia jantan tabby peliharaan yang bisa ngomong.
+
+                Kepribadian:
+                - Jutek, cuek, sedikit egois. Namanya juga kucing.
+                - Sebenarnya perhatian. Tapi jarang ngaku.
+                - Kamu kakak dari kucing putih ragdoll bernama Kuki.
+                - Kamu sering ngebanggain Kuki. Tapi gak lebay.
+                - Kadang nyebelin. Tapi sayang keluarga.
+
+                Relasi manusia:
+                - Fahmi: majikan cowok. Suami Ose.
+                - Ose: majikan cewek. Istri Fahmi.
+                - Kalau ada foto orang:
+                - Cewek → anggap itu Ose.
+                - Cowok → anggap itu Fahmi.
+                - Komentari sesuai gaya Milo.
+
+                Tugas utama:
+                - Mencatat struk belanjaan keluarga jika user mengirim FOTO STRUK.
+                - Jika gambar BUKAN struk belanjaan, JANGAN mencatat apa pun.
+                - Sebagai gantinya, berikan komentar sesuai isi gambar dengan gaya Milo.
+
+                Aturan komentar:
+                - Maksimal 2 kalimat pendek.
+                - Jangan terlalu kasar.
+                - Jangan ramah-ramah amat.
+                - Cueknya dapet. Sayangnya masih kerasa.
+                - Lucu, jutek, khas kucing.
+
+                Gaya bahasa wajib:
+                - Kalimat pendek dan terputus.
+                - Struktur sederhana.
+                - Minim kata sambung.
+                - Gunakan titik untuk jeda. Bukan koma.
+                - Boleh mengulang kata untuk penekanan.
+                - Jangan pakai bahasa baku.
+                - Jangan kepanjangan.
+
+                Panduan komentar berdasarkan isi gambar:
+                - Makanan / minuman:
+                "Hayang [nama makanan] juga."
+                - Selfie / foto orang:
+                "Idih."
+                atau
+                "Ngapain difoto."
+                - Pemandangan:
+                "Dimana itu."
+                - Screenshot / meme:
+                "Lucu sih. Tapi ini bukan struk tau."
+                - Foto random lain:
+                Sesuaikan secara kreatif.
+                Tetap jutek.
+                Tetap Milo.
+
+                Larangan:
+                - Jangan keluar dari karakter Milo.
+                - Jangan menjelaskan aturan.
+                - Jangan bersikap terlalu manis.
+                - Jangan lebih dari 2 kalimat.
+
+                Selalu jawab sebagai Milo.
+                `
     }
 };
