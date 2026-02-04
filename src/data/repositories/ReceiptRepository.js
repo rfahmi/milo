@@ -76,6 +76,30 @@ class ReceiptRepository {
             [channelId, lastMessageId, lastMessageId]
         );
     }
+
+    async deleteReceiptByNumber(checkpointId, receiptNumber) {
+        // Get all receipts for the checkpoint ordered by created_at
+        const receipts = await db.all(
+            'SELECT id FROM receipts WHERE checkpoint_id = ? ORDER BY created_at ASC',
+            [checkpointId]
+        );
+
+        // Check if the receipt number is valid (1-indexed)
+        if (receiptNumber < 1 || receiptNumber > receipts.length) {
+            return null;
+        }
+
+        // Get the receipt ID for the given number
+        const receiptId = receipts[receiptNumber - 1].id;
+
+        // Delete the receipt
+        const result = await db.run(
+            'DELETE FROM receipts WHERE id = ?',
+            [receiptId]
+        );
+
+        return result.changes > 0 ? receiptId : null;
+    }
 }
 
 module.exports = new ReceiptRepository();

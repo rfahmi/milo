@@ -39,6 +39,16 @@ module.exports = {
             subcommand
                 .setName('refresh-names')
                 .setDescription('Update semua nama user di database sesuai display name Discord saat ini.')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('delete')
+                .setDescription('Hapus transaksi tertentu berdasarkan nomor yang muncul di /status.')
+                .addIntegerOption(option =>
+                    option.setName('number')
+                        .setDescription('Nomor transaksi yang ingin dihapus (lihat /status)')
+                        .setRequired(true)
+                        .setMinValue(1))
         ),
     async execute(interaction) {
         console.log('[DEBUG] Admin command triggered');
@@ -181,6 +191,44 @@ module.exports = {
                 });
             } catch (error) {
                 console.error('Refresh names failed:', error);
+                await interaction.editReply({ content: `❌ Failed: ${error.message}` });
+            }
+        } else if (subcommand === 'delete') {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const receiptNumber = interaction.options.getInteger('number');
+                const receiptRepo = require('../data/repositories/ReceiptRepository');
+
+                // Get the active checkpoint
+                const activeCheckpoint = await receiptRepo.getActiveCheckpoint(interaction.channelId);
+                if (!activeCheckpoint) {
+                    return await interaction.editReply({
+                        content: '❌ Tidak ada checkpoint yang aktif saat ini.'
+                    });
+                }
+
+                // Verify checkpoint is running (not closed)
+                if (activeCheckpoint.closed_at !== null) {
+                    return await interaction.editReply({
+                        content: '❌ Checkpoint sudah ditutup. Hanya bisa menghapus transaksi dari checkpoint yang sedang berjalan.'
+                    });
+                }
+
+                // Delete the receipt
+                const deletedId = await receiptRepo.deleteReceiptByNumber(activeCheckpoint.id, receiptNumber);
+
+                if (!deletedId) {
+                    return await interaction.editReply({
+                        content: `❌ Transaksi nomor ${receiptNumber} tidak ditemukan. Gunakan /status untuk melihat daftar transaksi.`
+                    });
+                }
+
+                await interaction.editReply({
+                    content: `✅ Transaksi nomor ${receiptNumber} berhasil dihapus dari checkpoint #${activeCheckpoint.id}.`
+                });
+            } catch (error) {
+                console.error('Delete transaction failed:', error);
                 await interaction.editReply({ content: `❌ Failed: ${error.message}` });
             }
         }

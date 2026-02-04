@@ -112,7 +112,7 @@ class ReceiptService {
             });
 
             if (receiptId) {
-                return t.receipts.acknowledged(active.id, receiptId, msg.author.username, amount.toLocaleString('id-ID'));
+                return t.receipts.acknowledged(active.id, receiptId, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID'));
             }
         } catch (e) {
             console.log(`Not a receipt (${att.url}): ${e.message}`);
