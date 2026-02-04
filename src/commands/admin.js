@@ -49,6 +49,25 @@ module.exports = {
                         .setDescription('Nomor transaksi yang ingin dihapus (lihat /status)')
                         .setRequired(true)
                         .setMinValue(1))
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('backup-schedule')
+                .setDescription('Jadwalkan backup otomatis menggunakan cron syntax.')
+                .addStringOption(option =>
+                    option.setName('cron')
+                        .setDescription('Cron expression (contoh: "0 2 * * *" untuk setiap hari jam 2 pagi Jakarta)')
+                        .setRequired(true))
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('backup-schedule-status')
+                .setDescription('Lihat status jadwal backup otomatis.')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('backup-schedule-disable')
+                .setDescription('Nonaktifkan jadwal backup otomatis.')
         ),
     async execute(interaction) {
         console.log('[DEBUG] Admin command triggered');
@@ -229,6 +248,82 @@ module.exports = {
                 });
             } catch (error) {
                 console.error('Delete transaction failed:', error);
+                await interaction.editReply({ content: `❌ Failed: ${error.message}` });
+            }
+        } else if (subcommand === 'backup-schedule') {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const cronExpression = interaction.options.getString('cron');
+                const cron = require('node-cron');
+
+                // Validate cron expression
+                if (!cron.validate(cronExpression)) {
+                    return await interaction.editReply({
+                        content: '❌ Invalid cron expression. Contoh: "0 2 * * *" (setiap hari jam 2 pagi)'
+                    });
+                }
+
+                const receiptRepo = require('../data/repositories/ReceiptRepository');
+                const backupScheduler = require('../services/BackupScheduler');
+
+                await receiptRepo.setBackupSchedule(cronExpression);
+                backupScheduler.startSchedule(cronExpression);
+
+                await interaction.editReply({
+                    content: `✅ Backup schedule berhasil diatur!\n` +
+                        `Cron: \`${cronExpression}\`\n` +
+                        `Timezone: Asia/Jakarta\n` +
+                        `Channel: <#${config.discord.channelId}>`
+                });
+            } catch (error) {
+                console.error('Set backup schedule failed:', error);
+                await interaction.editReply({ content: `❌ Failed: ${error.message}` });
+            }
+        } else if (subcommand === 'backup-schedule-status') {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const receiptRepo = require('../data/repositories/ReceiptRepository');
+                const backupScheduler = require('../services/BackupScheduler');
+                const schedule = await receiptRepo.getBackupSchedule();
+
+                if (!schedule) {
+                    return await interaction.editReply({
+                        content: '📅 Belum ada jadwal backup yang diatur.'
+                    });
+                }
+
+                const status = schedule.enabled ? '✅ Aktif' : '❌ Nonaktif';
+                const running = backupScheduler.isRunning() ? '🟢 Running' : '🔴 Stopped';
+
+                await interaction.editReply({
+                    content: `📅 **Backup Schedule Status**\n` +
+                        `Status: ${status}\n` +
+                        `Scheduler: ${running}\n` +
+                        `Cron: \`${schedule.cron_expression}\`\n` +
+                        `Timezone: Asia/Jakarta\n` +
+                        `Last Updated: ${new Date(schedule.updated_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`
+                });
+            } catch (error) {
+                console.error('Get backup schedule status failed:', error);
+                await interaction.editReply({ content: `❌ Failed: ${error.message}` });
+            }
+        } else if (subcommand === 'backup-schedule-disable') {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const receiptRepo = require('../data/repositories/ReceiptRepository');
+                const backupScheduler = require('../services/BackupScheduler');
+
+                await receiptRepo.disableBackupSchedule();
+                backupScheduler.stop();
+
+                await interaction.editReply({
+                    content: '✅ Backup schedule berhasil dinonaktifkan.'
+                });
+            } catch (error) {
+                console.error('Disable backup schedule failed:', error);
                 await interaction.editReply({ content: `❌ Failed: ${error.message}` });
             }
         }

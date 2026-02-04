@@ -18,6 +18,10 @@ async function main() {
     // Start Discord Client
     await client.login();
 
+    // Initialize backup scheduler
+    const backupScheduler = require('./services/BackupScheduler');
+    await backupScheduler.init(client.client);
+
     // Optional: Health check server for Railway/Docker
     const app = express();
     const port = process.env.PORT || 8080;

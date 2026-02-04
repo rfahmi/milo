@@ -122,6 +122,16 @@ function initSchema() {
          PRIMARY KEY (user_id, channel_id)
       )
     `);
+
+        db.run(`
+      CREATE TABLE IF NOT EXISTS backup_schedule (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        cron_expression TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
     });
 
     console.log('Database schema initialized.');

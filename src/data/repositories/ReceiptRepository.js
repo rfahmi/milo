@@ -100,6 +100,35 @@ class ReceiptRepository {
 
         return result.changes > 0 ? receiptId : null;
     }
+
+    async getBackupSchedule() {
+        return await db.get('SELECT * FROM backup_schedule WHERE id = 1');
+    }
+
+    async setBackupSchedule(cronExpression) {
+        const now = new Date().toISOString();
+        const existing = await this.getBackupSchedule();
+        
+        if (existing) {
+            return await db.run(
+                'UPDATE backup_schedule SET cron_expression = ?, enabled = 1, updated_at = ? WHERE id = 1',
+                [cronExpression, now]
+            );
+        } else {
+            return await db.run(
+                'INSERT INTO backup_schedule (id, cron_expression, enabled, created_at, updated_at) VALUES (1, ?, 1, ?, ?)',
+                [cronExpression, now, now]
+            );
+        }
+    }
+
+    async disableBackupSchedule() {
+        const now = new Date().toISOString();
+        return await db.run(
+            'UPDATE backup_schedule SET enabled = 0, updated_at = ? WHERE id = 1',
+            [now]
+        );
+    }
 }
 
 module.exports = new ReceiptRepository();
