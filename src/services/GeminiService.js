@@ -54,39 +54,63 @@ class GeminiService {
             }]
         };
 
-        const resp = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
+        const maxRetries = 3;
+        let retryCount = 0;
+        let delay = 2000; // Start with 2 seconds
 
-        if (!resp.ok) {
-            const errText = await resp.text();
-            throw new Error(`Gemini API error (HTTP ${resp.status}): ${errText}`);
-        }
+        while (retryCount <= maxRetries) {
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
 
-        const json = await resp.json();
-        if (json.error) throw new Error(`Gemini API error: ${json.error.message}`);
+                if (resp.status === 429 || resp.status === '429') {
+                    console.warn(`[GeminiService] Rate limit hit (429) on extractTotal. Retrying in ${delay}ms... (Attempt ${retryCount + 1}/${maxRetries})`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    retryCount++;
+                    delay *= 2; // Exponential backoff
+                    continue;
+                }
 
-        const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (!text) throw new Error('Empty response from Gemini');
+                if (!resp.ok) {
+                    const errText = await resp.text();
+                    throw new Error(`Gemini API error (HTTP ${resp.status}): ${errText}`);
+                }
 
-        if (text.trim().toUpperCase().includes('NOT_A_RECEIPT') || text.trim().toUpperCase() === 'NOT A RECEIPT') {
-            throw new Error('Image is not a valid receipt');
-        }
+                const json = await resp.json();
+                if (json.error) throw new Error(`Gemini API error: ${json.error.message}`);
 
-        const clean = text.replace(/[Rp\.,\s]/gi, '');
-        const match = clean.match(/(\d+)/);
+                const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (!text) throw new Error('Empty response from Gemini');
 
-        if (match) {
-            const amount = parseFloat(match[1]);
-            if (amount < 100 || amount > 100000000) {
-                throw new Error(`Extracted amount seems unreasonable: ${amount}. Original text: '${text}'`);
+                if (text.trim().toUpperCase().includes('NOT_A_RECEIPT') || text.trim().toUpperCase() === 'NOT A RECEIPT') {
+                    throw new Error('Image is not a valid receipt');
+                }
+
+                const clean = text.replace(/[Rp\.,\s]/gi, '');
+                const match = clean.match(/(\d+)/);
+
+                if (match) {
+                    const amount = parseFloat(match[1]);
+                    if (amount < 100 || amount > 100000000) {
+                        throw new Error(`Extracted amount seems unreasonable: ${amount}. Original text: '${text}'`);
+                    }
+                    return amount;
+                }
+
+                throw new Error(`Could not parse total from Gemini response. Text: '${text}'`);
+
+            } catch (e) {
+                // If it's not a rate limit error, throw immediately
+                if (retryCount >= maxRetries || !e.message.includes('429')) {
+                    throw e;
+                }
             }
-            return amount;
         }
 
-        throw new Error(`Could not parse total from Gemini response. Text: '${text}'`);
+        throw new Error('Rate limit exceeded after multiple retries');
     }
 
     async generateSassyComment(imageUrl) {

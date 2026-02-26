@@ -132,6 +132,22 @@ function initSchema() {
         updated_at TEXT NOT NULL
       )
     `);
+
+        // Create indexes for performance
+        db.run(`
+      CREATE INDEX IF NOT EXISTS idx_receipts_message_id 
+        ON receipts(message_id)
+    `);
+
+        db.run(`
+      CREATE INDEX IF NOT EXISTS idx_receipts_checkpoint_id 
+        ON receipts(checkpoint_id)
+    `);
+
+        db.run(`
+      CREATE INDEX IF NOT EXISTS idx_receipts_checkpoint_user 
+        ON receipts(checkpoint_id, user_id)
+    `);
     });
 
     console.log('Database schema initialized.');

@@ -31,9 +31,117 @@ class DiscordClient {
         }
     }
 
+    async processBacklog() {
+        try {
+            const receiptRepo = require('../data/repositories/ReceiptRepository');
+            
+            // Get active checkpoint
+            const activeCheckpoint = await receiptRepo.getActiveCheckpoint(config.discord.channelId);
+            if (!activeCheckpoint) {
+                console.log('[Backlog] No active checkpoint, skipping backlog processing');
+                return;
+            }
+
+            console.log(`[Backlog] Found active checkpoint #${activeCheckpoint.id}, processing missed messages...`);
+            
+            const channel = await this.client.channels.fetch(config.discord.channelId);
+            if (!channel) {
+                console.error('[Backlog] Could not fetch configured channel');
+                return;
+            }
+
+            // Fetch messages after checkpoint start
+            const messages = await channel.messages.fetch({
+                after: activeCheckpoint.start_message_id,
+                limit: 100
+            });
+
+            // Filter for messages with image attachments only
+            const imageMessages = Array.from(messages.values())
+                .filter(msg => !msg.author.bot && msg.attachments.size > 0)
+                .filter(msg => {
+                    for (const [, att] of msg.attachments) {
+                        if (att.contentType?.startsWith('image/')) return true;
+                    }
+                    return false;
+                })
+                .reverse(); // Process in chronological order
+
+            if (imageMessages.length === 0) {
+                console.log('[Backlog] No missed image messages to process');
+                return;
+            }
+
+            console.log(`[Backlog] Found ${imageMessages.length} missed messages with images`);
+
+            let processedCount = 0;
+            let successCount = 0;
+            let errorCount = 0;
+            const BATCH_SIZE = 20;
+            const BATCH_DELAY_MS = 2000;
+
+            for (let i = 0; i < imageMessages.length; i++) {
+                const message = imageMessages[i];
+                
+                // Check if already processed
+                const existing = await receiptRepo.getReceiptByMessageId(message.id);
+                if (existing) {
+                    console.log(`[Backlog] Message ${message.id} already processed, skipping`);
+                    continue;
+                }
+
+                // Process each image attachment
+                for (const [, attachment] of message.attachments) {
+                    if (!attachment.contentType?.startsWith('image/')) continue;
+
+                    try {
+                        const result = await receiptService.processAttachment(
+                            attachment,
+                            message,
+                            config.discord.channelId
+                        );
+                        
+                        if (result) {
+                            successCount++;
+                            console.log(`[Backlog] Processed receipt from ${message.author.username}`);
+                        }
+                    } catch (error) {
+                        errorCount++;
+                        console.error(`[Backlog] Error processing message ${message.id}:`, error.message);
+                    }
+                }
+
+                processedCount++;
+
+                // Add delay between batches
+                if ((i + 1) % BATCH_SIZE === 0 && i + 1 < imageMessages.length) {
+                    console.log(`[Backlog] Processed ${i + 1}/${imageMessages.length}, waiting ${BATCH_DELAY_MS}ms...`);
+                    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+                }
+            }
+
+            // Send summary notification
+            if (processedCount > 0) {
+                const summaryMessage = `✅ **Backlog Processing Complete**\n` +
+                    `Processed ${processedCount} missed message(s) during downtime\n` +
+                    `✓ ${successCount} receipt(s) successfully added\n` +
+                    (errorCount > 0 ? `✗ ${errorCount} error(s) encountered` : '');
+                
+                await channel.send(summaryMessage);
+                console.log(`[Backlog] ${summaryMessage.replace(/\n/g, ' ')}`);
+            }
+
+        } catch (error) {
+            console.error('[Backlog] Error during backlog processing:', error);
+        }
+    }
+
     setupEvents() {
-        this.client.once(Events.ClientReady, c => {
+        this.client.once(Events.ClientReady, async c => {
             console.log(`Ready! Logged in as ${c.user.tag}`);
+            
+            // Process backlog after bot is ready
+            await this.processBacklog();
         });
 
         this.client.on(Events.InteractionCreate, async interaction => {

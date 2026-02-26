@@ -51,6 +51,14 @@ class ReceiptRepository {
         );
     }
 
+    async getReceiptCountForCheckpoint(checkpointId) {
+        const row = await db.get(
+            'SELECT COUNT(*) as count FROM receipts WHERE checkpoint_id = ?',
+            [checkpointId]
+        );
+        return row ? row.count : 0;
+    }
+
     async getCheckpointSummary(checkpointId) {
         // Group by user_id only to avoid splitting if name changes. MAX(user_name) picks the latest/lexicographical name.
         return await db.all(
@@ -74,6 +82,13 @@ class ReceiptRepository {
         return await db.run(
             'INSERT INTO channel_state (channel_id, last_message_id) VALUES (?,?) ON CONFLICT(channel_id) DO UPDATE SET last_message_id = ?',
             [channelId, lastMessageId, lastMessageId]
+        );
+    }
+
+    async getReceiptByMessageId(messageId) {
+        return await db.get(
+            'SELECT * FROM receipts WHERE message_id = ? LIMIT 1',
+            [messageId]
         );
     }
 

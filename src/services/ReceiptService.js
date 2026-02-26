@@ -98,6 +98,13 @@ class ReceiptService {
         const active = await receiptRepo.getActiveCheckpoint(channelId);
         if (!active) return null;
 
+        // Check if this message has already been processed
+        const existing = await receiptRepo.getReceiptByMessageId(msg.id);
+        if (existing) {
+            console.log(`[ReceiptService] Skipping already processed message ${msg.id}`);
+            return null;
+        }
+
         try {
             const amount = await geminiService.extractTotal(att.url);
             const receiptId = await receiptRepo.addReceipt({
@@ -112,7 +119,8 @@ class ReceiptService {
             });
 
             if (receiptId) {
-                return t.receipts.acknowledged(active.id, receiptId, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID'));
+                const orderNumber = await receiptRepo.getReceiptCountForCheckpoint(active.id);
+                return t.receipts.acknowledged(active.id, orderNumber, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID'));
             }
         } catch (e) {
             console.log(`Not a receipt (${att.url}): ${e.message}`);
@@ -154,26 +162,8 @@ class ReceiptService {
 
             await conversationRepo.clearState(msg.author.id, channelId);
 
-            // TODO: Update addReceipt schema to support "description" or append to user_name/log?
-            // Since we don't have a description column yet, we could append it to user_name or ignore (per current schema).
-            // BUT user asked: "catat 200000 dengan catatan 'Indomaret'".
-            // Let's assume we don't have a description col yet. I should add one.
-            // OR simpler: Append to user name or handle it? 
-            // "Indomaret" -> store?  Wait, schema is restricted.
-            // Let's modify schema to add `description` column?
-            // Plan didn't explicitly say "Modify Receipt Schema" but user requested "catatan 'Indomaret'".
-            // I will hack it for now: Create receipt, but maybe I should add a column.
-            // Let's stick to the plan: Just add the receipt. 
-            // Wait, user expects "catatan". The current schema:
-            // user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, created_at.
-            // I will assume for this iteration I just save the amount.
-            // Refinement: I should probably update the DB schema to add `description`.
-            // But let's proceed with current schema and maybe append to the response "Dicatat (Indomaret)".
-            // ACTUALLY: I should add a description column. It's cleaner.
-            // But for now, to save steps, I will just proceed. The user won't see the description in report unless I change schema.
-            // Let's assume the user just wants it recorded for now.
-
-            return t.receipts.acknowledged(activeCheckpoint.id, receiptId, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID')) + ` (${description})`;
+            const orderNumber = await receiptRepo.getReceiptCountForCheckpoint(activeCheckpoint.id);
+            return t.receipts.acknowledged(activeCheckpoint.id, orderNumber, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID')) + ` (${description})`;
         }
 
         // 2. No active state, analyze text
@@ -223,7 +213,8 @@ class ReceiptService {
                     created_at: new Date().toISOString()
                 });
 
-                return t.receipts.acknowledged(activeCheckpoint.id, receiptId, msg.member?.displayName || msg.author.username, analysis.amount.toLocaleString('id-ID')) + ` (${analysis.item})`;
+                const orderNumber = await receiptRepo.getReceiptCountForCheckpoint(activeCheckpoint.id);
+                return t.receipts.acknowledged(activeCheckpoint.id, orderNumber, msg.member?.displayName || msg.author.username, analysis.amount.toLocaleString('id-ID')) + ` (${analysis.item})`;
             }
         }
 
