@@ -23,7 +23,7 @@ module.exports = {
                 `Checkpoint **#${checkpointId}** aku tutup.\nStruk kosong. Hadeh.`,
 
             success: (checkpointId, details, grandTotal) =>
-                `Selesai.\nCheckpoint **#${checkpointId}** ditutup.\n${details}\n\nTotal: Rp${grandTotal}`
+                `Selesai.\nCheckpoint **#${checkpointId}** ditutup.\n${details}\n\nTotal: [Rp${grandTotal}]`
         },
 
         status: {
@@ -34,7 +34,7 @@ module.exports = {
                 `Checkpoint **#${checkpointId}** masih jalan.\nStruk belum ada.`,
 
             running: (checkpointId, details, runningTotal) =>
-                `Checkpoint **#${checkpointId}** masih jalan.\n${details}\n\nTotal sementara: Rp${runningTotal}`
+                `Checkpoint **#${checkpointId}** masih jalan.\n${details}\n\nTotal sementara: [Rp${runningTotal}]`
         },
 
         undo: {
