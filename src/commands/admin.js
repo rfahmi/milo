@@ -213,7 +213,7 @@ module.exports = {
                 await interaction.editReply({ content: `❌ Failed: ${error.message}` });
             }
         } else if (subcommand === 'delete') {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply();
 
             try {
                 const receiptNumber = interaction.options.getInteger('number');
