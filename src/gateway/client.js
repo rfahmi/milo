@@ -78,8 +78,7 @@ class DiscordClient {
             let successCount = 0;
             let skippedCount = 0;
             let errorCount = 0;
-            const BATCH_SIZE = 20;
-            const BATCH_DELAY_MS = 2000;
+            const DELAY_PER_ATTACHMENT_MS = 3000; // Delay between each Gemini API call to avoid rate limits
 
             for (let i = 0; i < imageMessages.length; i++) {
                 const message = imageMessages[i];
@@ -116,19 +115,23 @@ class DiscordClient {
                             successCount++;
                             console.log(`[Backlog] Processed receipt from ${message.author.username} (attachment ${attachment.id})`);
                         }
+
+                        // Delay after each Gemini call to avoid rate limits
+                        await new Promise(resolve => setTimeout(resolve, DELAY_PER_ATTACHMENT_MS));
                     } catch (error) {
                         errorCount++;
                         console.error(`[Backlog] Error processing attachment ${attachment.id} (message ${message.id}):`, error.message);
+
+                        // If rate limited, wait longer before retrying next attachment
+                        if (error.message?.includes('429') || error.message?.toLowerCase().includes('rate')) {
+                            const rateLimitDelay = DELAY_PER_ATTACHMENT_MS * 5;
+                            console.log(`[Backlog] Rate limited, waiting ${rateLimitDelay}ms...`);
+                            await new Promise(resolve => setTimeout(resolve, rateLimitDelay));
+                        }
                     }
                 }
 
                 processedCount++;
-
-                // Add delay between batches
-                if ((i + 1) % BATCH_SIZE === 0 && i + 1 < imageMessages.length) {
-                    console.log(`[Backlog] Processed ${i + 1}/${imageMessages.length}, waiting ${BATCH_DELAY_MS}ms...`);
-                    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
-                }
             }
 
             // Send summary notification
