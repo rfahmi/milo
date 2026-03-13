@@ -1,8 +1,30 @@
+// Helper to format numbers as Indonesian Rupiah
+function formatRupiah(amount) {
+    if (typeof amount !== 'number') amount = Number(amount);
+    return amount.toLocaleString('id-ID');
+}
+// Helper to format numbers as Indonesian Rupiah
+function formatRupiah(amount) {
+    if (typeof amount !== 'number') amount = Number(amount);
+    return amount.toLocaleString('id-ID');
+}
+
+// Helper to format numbers as Indonesian Rupiah
+function formatRupiah(amount) {
+    if (typeof amount !== 'number') amount = Number(amount);
+    return amount.toLocaleString('id-ID');
+}
+
 // Milo - Translation and wording file
-//
 // This file centralizes all chat messages and responses from Milo
 // the Persian cat. Makes it easier to update personality, tone, or
 // add multi-language support in the future.
+
+// Helper to format numbers as Indonesian Rupiah
+function formatRupiah(amount) {
+    if (typeof amount !== 'number') amount = Number(amount);
+    return amount.toLocaleString('id-ID');
+}
 
 module.exports = {
     // Slash command responses
@@ -22,8 +44,8 @@ module.exports = {
             noReceipts: (checkpointId) =>
                 `Checkpoint **#${checkpointId}** aku tutup.\nStruk kosong. Hadeh.`,
 
-            success: (checkpointId, details, grandTotal) =>
-                `Selesai.\nCheckpoint **#${checkpointId}** ditutup.\n${details}\n\nTotal: [Rp${grandTotal}]`
+                success: (checkpointId, details, grandTotal) =>
+                    `Selesai.\nCheckpoint **#${checkpointId}** ditutup.\n${details}\n\nTotal: Rp${formatRupiah(grandTotal)}`
         },
 
         status: {
@@ -33,9 +55,10 @@ module.exports = {
             noReceipts: (checkpointId) =>
                 `Checkpoint **#${checkpointId}** masih jalan.\nStruk belum ada.`,
 
-            running: (checkpointId, details, runningTotal) =>
-                `Checkpoint **#${checkpointId}** masih jalan.\n${details}\n\nTotal sementara: [Rp${runningTotal}]`
+                running: (checkpointId, details, runningTotal) =>
+                    `Checkpoint **#${checkpointId}** masih jalan.\n${details}\n\nTotal sementara: Rp${formatRupiah(runningTotal)}`
         },
+// Helper to format numbers as Indonesian Rupiah
 
         undo: {
             noCheckpoint: () =>
