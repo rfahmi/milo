@@ -84,6 +84,15 @@ class DiscordClient {
             for (let i = 0; i < imageMessages.length; i++) {
                 const message = imageMessages[i];
 
+                // Ensure guild member data is populated for correct display name
+                if (!message.member && message.guild) {
+                    try {
+                        message.member = await message.guild.members.fetch(message.author.id);
+                    } catch (e) {
+                        console.warn(`[Backlog] Could not fetch member for ${message.author.username}: ${e.message}`);
+                    }
+                }
+
                 // Process each image attachment individually (dedup is per-attachment inside processAttachment)
                 for (const [, attachment] of message.attachments) {
                     if (!attachment.contentType?.startsWith('image/')) continue;
