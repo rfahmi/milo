@@ -1,7 +1,9 @@
 const cron = require('node-cron');
 const fs = require('fs');
+const path = require('path');
 const { AttachmentBuilder } = require('discord.js');
 const config = require('../config');
+const db = require('../data/db');
 const receiptRepo = require('../data/repositories/ReceiptRepository');
 
 class BackupScheduler {
@@ -60,11 +62,23 @@ class BackupScheduler {
                 return;
             }
 
+            // Flush WAL to main DB file so backup is complete
+            try {
+                await db.run('PRAGMA wal_checkpoint(TRUNCATE)');
+                console.log('[BackupScheduler] WAL checkpoint completed before backup');
+            } catch (walErr) {
+                console.warn('[BackupScheduler] WAL checkpoint warning:', walErr.message);
+            }
+
             const now = new Date();
             const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 14);
             const filename = `receipts-${timestamp}.db`;
 
-            const attachment = new AttachmentBuilder(dbPath, { name: filename });
+            // Copy to a temp file to avoid sending a locked DB
+            const tempPath = path.join(path.dirname(dbPath), `.backup-${timestamp}.db`);
+            fs.copyFileSync(dbPath, tempPath);
+
+            const attachment = new AttachmentBuilder(tempPath, { name: filename });
 
             const channel = await this.client.channels.fetch(config.discord.channelId);
             if (!channel) {
@@ -76,6 +90,13 @@ class BackupScheduler {
                 content: `🔄 **Automated Backup**\nTimestamp: ${now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}`,
                 files: [attachment]
             });
+
+            // Clean up temp backup file
+            try {
+                fs.unlinkSync(tempPath);
+            } catch (cleanupErr) {
+                console.warn('[BackupScheduler] Could not clean up temp file:', cleanupErr.message);
+            }
 
             console.log(`[BackupScheduler] Backup sent successfully to channel ${config.discord.channelId}`);
         } catch (error) {
