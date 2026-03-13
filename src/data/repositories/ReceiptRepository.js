@@ -28,16 +28,17 @@ class ReceiptRepository {
 
     async addReceipt(data) {
         const result = await db.run(
-            'INSERT OR IGNORE INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, image_url, amount, description, created_at) VALUES (?,?,?,?,?,?,?,?,?)',
+            'INSERT OR IGNORE INTO receipts (user_id, user_name, channel_id, checkpoint_id, message_id, attachment_id, image_url, amount, description, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
             [
                 data.user_id,
                 data.user_name,
                 data.channel_id,
                 data.checkpoint_id,
                 data.message_id,
+                data.attachment_id || null,
                 data.image_url,
                 data.amount,
-                data.description || null, // Handle description
+                data.description || null,
                 data.created_at
             ]
         );
@@ -89,6 +90,13 @@ class ReceiptRepository {
         return await db.get(
             'SELECT * FROM receipts WHERE message_id = ? LIMIT 1',
             [messageId]
+        );
+    }
+
+    async getReceiptByAttachmentId(attachmentId) {
+        return await db.get(
+            'SELECT * FROM receipts WHERE attachment_id = ? LIMIT 1',
+            [attachmentId]
         );
     }
 

@@ -98,10 +98,10 @@ class ReceiptService {
         const active = await receiptRepo.getActiveCheckpoint(channelId);
         if (!active) return null;
 
-        // Check if this message has already been processed
-        const existing = await receiptRepo.getReceiptByMessageId(msg.id);
+        // Check if this specific attachment has already been processed
+        const existing = await receiptRepo.getReceiptByAttachmentId(att.id);
         if (existing) {
-            console.log(`[ReceiptService] Skipping already processed message ${msg.id}`);
+            console.log(`[ReceiptService] Skipping already processed attachment ${att.id} (message ${msg.id})`);
             return null;
         }
 
@@ -113,6 +113,7 @@ class ReceiptService {
                 channel_id: channelId,
                 checkpoint_id: active.id,
                 message_id: msg.id,
+                attachment_id: att.id,
                 image_url: att.url,
                 amount: amount,
                 created_at: new Date().toISOString()

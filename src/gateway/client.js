@@ -76,23 +76,25 @@ class DiscordClient {
 
             let processedCount = 0;
             let successCount = 0;
+            let skippedCount = 0;
             let errorCount = 0;
             const BATCH_SIZE = 20;
             const BATCH_DELAY_MS = 2000;
 
             for (let i = 0; i < imageMessages.length; i++) {
                 const message = imageMessages[i];
-                
-                // Check if already processed
-                const existing = await receiptRepo.getReceiptByMessageId(message.id);
-                if (existing) {
-                    console.log(`[Backlog] Message ${message.id} already processed, skipping`);
-                    continue;
-                }
 
-                // Process each image attachment
+                // Process each image attachment individually (dedup is per-attachment inside processAttachment)
                 for (const [, attachment] of message.attachments) {
                     if (!attachment.contentType?.startsWith('image/')) continue;
+
+                    // Check if this specific attachment was already processed
+                    const existing = await receiptRepo.getReceiptByAttachmentId(attachment.id);
+                    if (existing) {
+                        console.log(`[Backlog] Attachment ${attachment.id} (message ${message.id}) already processed, skipping`);
+                        skippedCount++;
+                        continue;
+                    }
 
                     try {
                         const result = await receiptService.processAttachment(
@@ -103,11 +105,11 @@ class DiscordClient {
                         
                         if (result) {
                             successCount++;
-                            console.log(`[Backlog] Processed receipt from ${message.author.username}`);
+                            console.log(`[Backlog] Processed receipt from ${message.author.username} (attachment ${attachment.id})`);
                         }
                     } catch (error) {
                         errorCount++;
-                        console.error(`[Backlog] Error processing message ${message.id}:`, error.message);
+                        console.error(`[Backlog] Error processing attachment ${attachment.id} (message ${message.id}):`, error.message);
                     }
                 }
 

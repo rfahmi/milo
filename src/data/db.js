@@ -105,6 +105,19 @@ function initSchema() {
             }
         });
 
+        // Migration: Add attachment_id column to support multiple receipts per message
+        db.run("ALTER TABLE receipts ADD COLUMN attachment_id TEXT", (err) => {
+            if (err && !err.message.includes('duplicate column name')) {
+                console.log('Migration note:', err.message);
+            }
+        });
+
+        // Unique index on attachment_id to prevent duplicate processing
+        db.run(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_receipts_attachment_id 
+        ON receipts(attachment_id) WHERE attachment_id IS NOT NULL
+    `);
+
         db.run(`
       CREATE TABLE IF NOT EXISTS channel_state (
         channel_id TEXT PRIMARY KEY,
