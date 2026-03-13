@@ -118,6 +118,13 @@ function initSchema() {
         ON receipts(attachment_id) WHERE attachment_id IS NOT NULL
     `);
 
+        // Migration: Add deleted_at column for soft-delete support
+        db.run("ALTER TABLE receipts ADD COLUMN deleted_at TEXT", (err) => {
+            if (err && !err.message.includes('duplicate column name')) {
+                console.log('Migration note:', err.message);
+            }
+        });
+
         db.run(`
       CREATE TABLE IF NOT EXISTS channel_state (
         channel_id TEXT PRIMARY KEY,

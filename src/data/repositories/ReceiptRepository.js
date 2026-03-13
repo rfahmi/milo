@@ -47,14 +47,14 @@ class ReceiptRepository {
 
     async getReceiptsForCheckpoint(checkpointId) {
         return await db.all(
-            'SELECT user_id, user_name, amount, description, created_at, message_id FROM receipts WHERE checkpoint_id = ? ORDER BY created_at ASC',
+            'SELECT user_id, user_name, amount, description, created_at, message_id FROM receipts WHERE checkpoint_id = ? AND deleted_at IS NULL ORDER BY created_at ASC',
             [checkpointId]
         );
     }
 
     async getReceiptCountForCheckpoint(checkpointId) {
         const row = await db.get(
-            'SELECT COUNT(*) as count FROM receipts WHERE checkpoint_id = ?',
+            'SELECT COUNT(*) as count FROM receipts WHERE checkpoint_id = ? AND deleted_at IS NULL',
             [checkpointId]
         );
         return row ? row.count : 0;
@@ -63,7 +63,7 @@ class ReceiptRepository {
     async getCheckpointSummary(checkpointId) {
         // Group by user_id only to avoid splitting if name changes. MAX(user_name) picks the latest/lexicographical name.
         return await db.all(
-            'SELECT MAX(user_name) as user_name, user_id, SUM(amount) AS total FROM receipts WHERE checkpoint_id = ? GROUP BY user_id ORDER BY total DESC',
+            'SELECT MAX(user_name) as user_name, user_id, SUM(amount) AS total FROM receipts WHERE checkpoint_id = ? AND deleted_at IS NULL GROUP BY user_id ORDER BY total DESC',
             [checkpointId]
         );
     }
@@ -101,9 +101,9 @@ class ReceiptRepository {
     }
 
     async deleteReceiptByNumber(checkpointId, receiptNumber) {
-        // Get all receipts for the checkpoint ordered by created_at
+        // Get all active (non-deleted) receipts for the checkpoint ordered by created_at
         const receipts = await db.all(
-            'SELECT id FROM receipts WHERE checkpoint_id = ? ORDER BY created_at ASC',
+            'SELECT id FROM receipts WHERE checkpoint_id = ? AND deleted_at IS NULL ORDER BY created_at ASC',
             [checkpointId]
         );
 
@@ -115,10 +115,12 @@ class ReceiptRepository {
         // Get the receipt ID for the given number
         const receiptId = receipts[receiptNumber - 1].id;
 
-        // Delete the receipt
+        // Soft-delete: mark as deleted instead of removing the row
+        // This prevents backlog recovery from re-processing the attachment
+        const deletedAt = new Date().toISOString();
         const result = await db.run(
-            'DELETE FROM receipts WHERE id = ?',
-            [receiptId]
+            'UPDATE receipts SET deleted_at = ? WHERE id = ?',
+            [deletedAt, receiptId]
         );
 
         return result.changes > 0 ? receiptId : null;

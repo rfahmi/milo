@@ -184,7 +184,7 @@ module.exports = {
 
             try {
                 // 1. Get all unique user IDs from DB
-                const users = await db.all('SELECT DISTINCT user_id FROM receipts');
+                const users = await db.all('SELECT DISTINCT user_id FROM receipts WHERE deleted_at IS NULL');
                 let updatedCount = 0;
                 let errorCount = 0;
 
