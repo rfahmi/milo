@@ -2,6 +2,12 @@ const receiptRepo = require('../data/repositories/ReceiptRepository');
 const geminiService = require('./GeminiService');
 const t = require('../utils/translations');
 
+// In-flight guard: tracks attachment IDs currently being processed.
+// Prevents a race where the live MessageCreate handler and processBacklog
+// both pass the DB dedup check before either has committed, causing Gemini
+// to be called twice for the same attachment.
+const inFlightAttachments = new Set();
+
 class ReceiptService {
     async startCheckpoint(channelId, messageId) {
         const active = await receiptRepo.getActiveCheckpoint(channelId);
@@ -27,7 +33,7 @@ class ReceiptService {
 
         const summary = this.calculateSummary(receipts);
         const { details, grandTotal } = this.formatSummary(summary, receipts);
-        return { success: true, message: t.commands.end.success(active.id, details, grandTotal.toLocaleString('id-ID')) };
+        return { success: true, message: t.commands.end.success(active.id, details, grandTotal) };
     }
 
     async status(channelId) {
@@ -44,7 +50,7 @@ class ReceiptService {
 
         const summary = this.calculateSummary(receipts);
         const { details, grandTotal } = this.formatSummary(summary, receipts);
-        return { success: true, message: t.commands.status.running(active.id, details, grandTotal.toLocaleString('id-ID')) };
+        return { success: true, message: t.commands.status.running(active.id, details, grandTotal) };
     }
 
     calculateSummary(receipts) {
@@ -105,6 +111,14 @@ class ReceiptService {
             return null;
         }
 
+        // Guard against concurrent processing of the same attachment
+        // (e.g. live MessageCreate fires while backlog loop is mid-flight for the same ID)
+        if (inFlightAttachments.has(att.id)) {
+            console.log(`[ReceiptService] Attachment ${att.id} already in-flight, skipping duplicate call`);
+            return null;
+        }
+        inFlightAttachments.add(att.id);
+
         try {
             const amount = await geminiService.extractTotal(att.url);
             const receiptId = await receiptRepo.addReceipt({
@@ -127,6 +141,8 @@ class ReceiptService {
             console.log(`Not a receipt (${att.url}): ${e.message}`);
             const sassy = await geminiService.generateSassyComment(att.url);
             return { reply: sassy, reference: true }; // Special object for reply with reference
+        } finally {
+            inFlightAttachments.delete(att.id);
         }
         return null;
     }

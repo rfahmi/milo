@@ -68,6 +68,11 @@ module.exports = {
             subcommand
                 .setName('backup-schedule-disable')
                 .setDescription('Nonaktifkan jadwal backup otomatis.')
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('backlog-reset')
+                .setDescription('Reset kursor backlog ke pesan terbaru — gunakan jika semua struk sudah tercatat.')
         ),
     async execute(interaction) {
         console.log('[DEBUG] Admin command triggered');
@@ -130,12 +135,27 @@ module.exports = {
             const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
             const filename = `receipts-${timestamp}.db`;
 
-            const attachment = new AttachmentBuilder(dbPath, { name: filename });
+            // Use VACUUM INTO to create a fully merged snapshot that includes all
+            // WAL-buffered writes. Direct file copy would miss the last few records
+            // that haven't been checkpointed into the main .db file yet.
+            const tempPath = path.join(path.dirname(dbPath), `.backup-${timestamp}.db`);
+            try {
+                await db.run(`VACUUM INTO ?`, [tempPath]);
+            } catch (vacuumErr) {
+                return interaction.editReply({ content: `❌ Failed to create backup snapshot: ${vacuumErr.message}` });
+            }
+
+            const attachment = new AttachmentBuilder(tempPath, { name: filename });
 
             await interaction.editReply({
                 content: '✅ Database backup ready.',
                 files: [attachment]
             });
+
+            // Clean up temp snapshot file
+            try {
+                fs.unlinkSync(tempPath);
+            } catch (_) { /* best-effort cleanup */ }
         } else if (subcommand === 'restore') {
             const attach = interaction.options.getAttachment('database_file');
 
@@ -324,6 +344,34 @@ module.exports = {
                 });
             } catch (error) {
                 console.error('Disable backup schedule failed:', error);
+                await interaction.editReply({ content: `❌ Failed: ${error.message}` });
+            }
+        } else if (subcommand === 'backlog-reset') {
+            await interaction.deferReply({ ephemeral: true });
+
+            try {
+                const receiptRepo = require('../data/repositories/ReceiptRepository');
+                const channel = await interaction.client.channels.fetch(config.discord.channelId);
+                if (!channel) {
+                    return interaction.editReply({ content: '❌ Channel tidak ditemukan.' });
+                }
+
+                // Fetch the single latest message to use as the new cursor
+                const latest = await channel.messages.fetch({ limit: 1 });
+                const latestMessage = latest.first();
+
+                if (!latestMessage) {
+                    return interaction.editReply({ content: '⚠️ Tidak ada pesan di channel.' });
+                }
+
+                await receiptRepo.setChannelLastMessage(config.discord.channelId, latestMessage.id);
+
+                await interaction.editReply({
+                    content: `✅ Backlog cursor direset ke pesan terbaru (ID: \`${latestMessage.id}\`).\n` +
+                        `Restart berikutnya tidak akan re-scan pesan-pesan lama.`
+                });
+            } catch (error) {
+                console.error('Backlog reset failed:', error);
                 await interaction.editReply({ content: `❌ Failed: ${error.message}` });
             }
         }

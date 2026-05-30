@@ -32,9 +32,14 @@ class DiscordClient {
     }
 
     async processBacklog() {
+        if (!config.backlog.enabled) {
+            console.log('[Backlog] Disabled via BACKLOG_ENABLED=false — skipping.');
+            return;
+        }
+
         try {
             const receiptRepo = require('../data/repositories/ReceiptRepository');
-            
+
             // Get active checkpoint
             const activeCheckpoint = await receiptRepo.getActiveCheckpoint(config.discord.channelId);
             if (!activeCheckpoint) {
@@ -50,14 +55,39 @@ class DiscordClient {
                 return;
             }
 
-            // Fetch messages after checkpoint start
+            // Use the last processed message ID as anchor so we only scan truly
+            // missed messages, not the entire checkpoint history on every restart.
+            const channelState = await receiptRepo.getChannelState(config.discord.channelId);
+            let afterMessageId;
+
+            if (channelState?.last_message_id) {
+                // Normal path: cursor was tracked from a previous run
+                afterMessageId = channelState.last_message_id;
+            } else {
+                // First run after this update (no cursor stored yet).
+                // Seed from the most recent receipt already in the DB so we don't
+                // re-scan the entire checkpoint history and re-process old images.
+                const lastReceipt = await receiptRepo.getLastReceiptForCheckpoint(activeCheckpoint.id);
+                afterMessageId = lastReceipt?.message_id || activeCheckpoint.start_message_id;
+
+                // Persist immediately so the next restart uses the fast path
+                if (afterMessageId) {
+                    await receiptRepo.setChannelLastMessage(config.discord.channelId, afterMessageId);
+                    console.log(`[Backlog] Seeded message cursor to ${afterMessageId}`);
+                }
+            }
+
+            console.log(`[Backlog] Scanning messages after ID ${afterMessageId}`);
+
+
+            // Fetch messages after anchor
             const messages = await channel.messages.fetch({
-                after: activeCheckpoint.start_message_id,
+                after: afterMessageId,
                 limit: 100
             });
 
-            // Filter for messages with image attachments only
-            const imageMessages = Array.from(messages.values())
+            // Filter for non-bot messages with at least one image attachment
+            const candidateMessages = Array.from(messages.values())
                 .filter(msg => !msg.author.bot && msg.attachments.size > 0)
                 .filter(msg => {
                     for (const [, att] of msg.attachments) {
@@ -67,12 +97,30 @@ class DiscordClient {
                 })
                 .reverse(); // Process in chronological order
 
+            // Pre-filter: only keep messages that have at least one attachment
+            // NOT yet recorded in the DB. This makes the count accurate and avoids
+            // wasting log noise on already-processed messages.
+            const imageMessages = [];
+            for (const msg of candidateMessages) {
+                let hasUnprocessed = false;
+                for (const [, att] of msg.attachments) {
+                    if (!att.contentType?.startsWith('image/')) continue;
+                    const existing = await receiptRepo.getReceiptByAttachmentId(att.id);
+                    if (!existing) { hasUnprocessed = true; break; }
+                }
+                if (hasUnprocessed) imageMessages.push(msg);
+                else {
+                    // All attachments already handled — advance cursor without re-processing
+                    await receiptRepo.setChannelLastMessage(config.discord.channelId, msg.id);
+                }
+            }
+
             if (imageMessages.length === 0) {
-                console.log('[Backlog] No missed image messages to process');
+                console.log('[Backlog] No new image messages to process — all up to date.');
                 return;
             }
 
-            console.log(`[Backlog] Found ${imageMessages.length} missed messages with images`);
+            console.log(`[Backlog] Found ${imageMessages.length} new message(s) with unprocessed images`);
 
             let processedCount = 0;
             let successCount = 0;
@@ -83,10 +131,13 @@ class DiscordClient {
             for (let i = 0; i < imageMessages.length; i++) {
                 const message = imageMessages[i];
 
-                // Ensure guild member data is populated for correct display name
+                // Ensure guild member data is populated for correct display name.
+                // message.member is a read-only getter in discord.js v14 — we cannot
+                // assign to it. Calling fetch() populates the guild member cache so
+                // the getter resolves correctly on the next access.
                 if (!message.member && message.guild) {
                     try {
-                        message.member = await message.guild.members.fetch(message.author.id);
+                        await message.guild.members.fetch(message.author.id);
                     } catch (e) {
                         console.warn(`[Backlog] Could not fetch member for ${message.author.username}: ${e.message}`);
                     }
@@ -97,9 +148,10 @@ class DiscordClient {
                     if (!attachment.contentType?.startsWith('image/')) continue;
 
                     // Check if this specific attachment was already processed
+                    // (a message may have multiple attachments; the pre-filter only
+                    // guarantees at least one is new, so we still dedup per-attachment here)
                     const existing = await receiptRepo.getReceiptByAttachmentId(attachment.id);
                     if (existing) {
-                        console.log(`[Backlog] Attachment ${attachment.id} (message ${message.id}) already processed, skipping`);
                         skippedCount++;
                         continue;
                     }
@@ -110,10 +162,23 @@ class DiscordClient {
                             message,
                             config.discord.channelId
                         );
-                        
-                        if (result) {
+
+                        if (result && typeof result === 'string') {
+                            // Confirmed receipt — acknowledged
                             successCount++;
                             console.log(`[Backlog] Processed receipt from ${message.author.username} (attachment ${attachment.id})`);
+                        } else if (result && result.reference) {
+                            // Non-receipt image (sassy comment path) — nothing stored in DB,
+                            // so without tracking it would be re-sent to Gemini on every
+                            // restart. Persist a seen-marker so dedup catches it next time.
+                            skippedCount++;
+                            console.log(`[Backlog] Non-receipt image skipped (attachment ${attachment.id})`);
+                            await receiptRepo.markAttachmentSeen(
+                                attachment.id,
+                                message.id,
+                                config.discord.channelId,
+                                activeCheckpoint.id
+                            );
                         }
 
                         // Delay after each Gemini call to avoid rate limits
@@ -131,6 +196,8 @@ class DiscordClient {
                     }
                 }
 
+                // Advance the last-seen message cursor so future restarts don't re-scan this message
+                await receiptRepo.setChannelLastMessage(config.discord.channelId, message.id);
                 processedCount++;
             }
 
@@ -240,6 +307,21 @@ class DiscordClient {
                             await message.channel.send(result);
                         } else if (result.reference) {
                             await message.reply(result.reply);
+
+                            // Mark this non-receipt image as seen so the backlog dedup
+                            // check finds it on the next restart and doesn't re-send
+                            // it to Gemini again.
+                            try {
+                                const receiptRepo = require('../data/repositories/ReceiptRepository');
+                                const active = await receiptRepo.getActiveCheckpoint(message.channelId);
+                                if (active) {
+                                    await receiptRepo.markAttachmentSeen(
+                                        attachment.id, message.id, message.channelId, active.id
+                                    );
+                                }
+                            } catch (e) {
+                                console.warn('[DEBUG] Could not mark non-receipt attachment as seen:', e.message);
+                            }
                         }
                     } else {
                         console.log('[DEBUG] processAttachment returned null (likely no active checkpoint or not a receipt)');
@@ -247,6 +329,15 @@ class DiscordClient {
                 } catch (error) {
                     console.error('[DEBUG] Error processing attachment:', error);
                 }
+            }
+
+            // Advance the last-seen message cursor so backlog on next restart
+            // doesn't re-scan messages that were already handled live.
+            try {
+                const receiptRepo = require('../data/repositories/ReceiptRepository');
+                await receiptRepo.setChannelLastMessage(message.channelId, message.id);
+            } catch (e) {
+                console.warn('[DEBUG] Could not update channel last_message_id:', e.message);
             }
         });
     }

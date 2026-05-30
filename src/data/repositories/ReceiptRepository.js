@@ -60,6 +60,29 @@ class ReceiptRepository {
         return row ? row.count : 0;
     }
 
+    async getLastReceiptForCheckpoint(checkpointId) {
+        // Returns the most recent receipt that has a message_id — used to seed the
+        // backlog message cursor on the first run after deployment.
+        return await db.get(
+            'SELECT message_id FROM receipts WHERE checkpoint_id = ? AND deleted_at IS NULL AND message_id IS NOT NULL ORDER BY created_at DESC LIMIT 1',
+            [checkpointId]
+        );
+    }
+
+    async markAttachmentSeen(attachmentId, messageId, channelId, checkpointId) {
+        // Inserts a soft-deleted placeholder so the backlog dedup check
+        // (getReceiptByAttachmentId) finds it and skips re-sending the image
+        // to Gemini on future restarts. Uses INSERT OR IGNORE — safe to call
+        // multiple times for the same attachment.
+        const now = new Date().toISOString();
+        await db.run(
+            `INSERT OR IGNORE INTO receipts
+             (user_id, user_name, channel_id, checkpoint_id, message_id, attachment_id, image_url, amount, created_at, deleted_at)
+             VALUES ('__seen__', '__seen__', ?, ?, ?, ?, NULL, 0, ?, ?)`,
+            [channelId, checkpointId, messageId, attachmentId, now, now]
+        );
+    }
+
     async getCheckpointSummary(checkpointId) {
         // Group by user_id only to avoid splitting if name changes. MAX(user_name) picks the latest/lexicographical name.
         return await db.all(

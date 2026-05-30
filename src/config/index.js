@@ -44,5 +44,9 @@ module.exports = {
     db: {
         path: dbPath,
     },
+    backlog: {
+        // Set BACKLOG_ENABLED=false in .env to skip backlog processing on startup
+        enabled: process.env.BACKLOG_ENABLED !== 'false',
+    },
     env: process.env.NODE_ENV || 'development',
 };

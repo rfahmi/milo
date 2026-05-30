@@ -62,21 +62,23 @@ class BackupScheduler {
                 return;
             }
 
-            // Flush WAL to main DB file so backup is complete
-            try {
-                await db.run('PRAGMA wal_checkpoint(TRUNCATE)');
-                console.log('[BackupScheduler] WAL checkpoint completed before backup');
-            } catch (walErr) {
-                console.warn('[BackupScheduler] WAL checkpoint warning:', walErr.message);
-            }
-
             const now = new Date();
             const timestamp = now.toISOString().replace(/[-:T]/g, '').slice(0, 14);
             const filename = `receipts-${timestamp}.db`;
 
-            // Copy to a temp file to avoid sending a locked DB
+            // Use VACUUM INTO to export a fully merged, self-contained snapshot.
+            // This atomically merges all WAL-buffered writes into the output file,
+            // so the backup always reflects the complete current state of the DB.
+            // The old wal_checkpoint + copyFileSync approach was unreliable because
+            // the checkpoint could fail silently or the copy could race the WAL flush.
             const tempPath = path.join(path.dirname(dbPath), `.backup-${timestamp}.db`);
-            fs.copyFileSync(dbPath, tempPath);
+            try {
+                await db.run('VACUUM INTO ?', [tempPath]);
+                console.log('[BackupScheduler] VACUUM INTO snapshot created');
+            } catch (vacuumErr) {
+                console.error('[BackupScheduler] VACUUM INTO failed:', vacuumErr.message);
+                return;
+            }
 
             const attachment = new AttachmentBuilder(tempPath, { name: filename });
 
