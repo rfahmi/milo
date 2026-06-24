@@ -1,0 +1,22 @@
+name: Deploy on Push
+
+on:
+  push:
+    branches:
+      - '**'   # triggers on commits to any branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so HEAD is accurate
+
+      - name: Push to deployment remote
+        run: |
+          git push -u \
+            https://${{ secrets.DEPLOY_USER }}:${{ secrets.DEPLOY_TOKEN }}@justrunmy.app/git/r_Dj5m6 \
+            HEAD:deploy
