@@ -18,7 +18,7 @@ function getDb() {
 
     ensureDbDirectory();
 
-    console.log(`Connecting to SQLite database at ${config.db.path}`);
+    console.log(`Connecting to SQLite database at ${path.resolve(config.db.path)}`);
     dbInstance = new sqlite3.Database(config.db.path, (err) => {
         if (err) {
             console.error('Could not connect to database', err);
