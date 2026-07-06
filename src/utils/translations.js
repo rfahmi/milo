@@ -45,6 +45,17 @@ module.exports = {
                 `Checkpoint **#${checkpointId}** aku hapus.\nAnggep gak pernah ada.`
         },
 
+        unclose: {
+            noClosedCheckpoint: () =>
+                `Gak ada checkpoint yang ditutup.\nMau buka apaan.`,
+
+            hasActiveWithReceipts: (checkpointId) =>
+                `Checkpoint **#${checkpointId}** masih jalan dan udah ada struk.\nSelesaikan dulu sebelum buka yang lama.`,
+
+            success: (checkpointId) =>
+                `Checkpoint **#${checkpointId}** dibuka lagi.\nLanjut catat.`
+        },
+
         unknown: () =>
             `Apaan itu.\nAku gak ngerti.`
     },

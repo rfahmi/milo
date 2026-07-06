@@ -100,6 +100,29 @@ class ReceiptService {
         return { success: false, message: 'Undo functionality pending repository update.' };
     }
 
+    async unclose(channelId) {
+        // Only allow unclose if there is no currently active checkpoint,
+        // OR if the active checkpoint has zero transactions.
+        const active = await receiptRepo.getActiveCheckpoint(channelId);
+        if (active) {
+            const activeReceipts = await receiptRepo.getReceiptsForCheckpoint(active.id);
+            if (activeReceipts.length > 0) {
+                return {
+                    success: false,
+                    message: t.commands.unclose.hasActiveWithReceipts(active.id)
+                };
+            }
+        }
+
+        const lastClosed = await receiptRepo.getLastClosedCheckpoint();
+        if (!lastClosed) {
+            return { success: false, message: t.commands.unclose.noClosedCheckpoint() };
+        }
+
+        await receiptRepo.reopenCheckpoint(lastClosed.id);
+        return { success: true, message: t.commands.unclose.success(lastClosed.id) };
+    }
+
     async processAttachment(att, msg, channelId) {
         const active = await receiptRepo.getActiveCheckpoint(channelId);
         if (!active) return null;

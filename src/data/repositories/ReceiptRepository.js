@@ -98,6 +98,20 @@ class ReceiptRepository {
         );
     }
 
+    async getLastClosedCheckpoint() {
+        // Returns the most recently closed checkpoint (regardless of channel)
+        return await db.get(
+            'SELECT * FROM checkpoints WHERE closed_at IS NOT NULL ORDER BY id DESC LIMIT 1'
+        );
+    }
+
+    async reopenCheckpoint(checkpointId) {
+        return await db.run(
+            'UPDATE checkpoints SET closed_at = NULL, end_message_id = NULL WHERE id = ?',
+            [checkpointId]
+        );
+    }
+
     async getChannelState(channelId) {
         return await db.get('SELECT * FROM channel_state WHERE channel_id = ?', [channelId]);
     }
