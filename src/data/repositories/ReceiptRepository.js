@@ -112,6 +112,14 @@ class ReceiptRepository {
         );
     }
 
+    async deleteCheckpoint(checkpointId) {
+        // Hard-delete only if the checkpoint has no receipts (safety guard)
+        return await db.run(
+            'DELETE FROM checkpoints WHERE id = ? AND (SELECT COUNT(*) FROM receipts WHERE checkpoint_id = ? AND deleted_at IS NULL) = 0',
+            [checkpointId, checkpointId]
+        );
+    }
+
     async getChannelState(channelId) {
         return await db.get('SELECT * FROM channel_state WHERE channel_id = ?', [channelId]);
     }

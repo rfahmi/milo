@@ -35,6 +35,7 @@ module.exports = {
         applicationId: process.env.DISCORD_APPLICATION_ID,
         channelId: process.env.DISCORD_CHANNEL_ID,
         adminId: process.env.DISCORD_ADMIN_USER_ID,
+        guildId: process.env.DISCORD_GUILD_ID,
     },
     gemini: {
         apiKey: process.env.GEMINI_API_KEY,

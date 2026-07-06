@@ -101,22 +101,26 @@ class ReceiptService {
     }
 
     async unclose(channelId) {
-        // Only allow unclose if there is no currently active checkpoint,
-        // OR if the active checkpoint has zero transactions.
+        // Fail fast: nothing to reopen if there are no closed checkpoints at all.
+        const lastClosed = await receiptRepo.getLastClosedCheckpoint();
+        if (!lastClosed) {
+            return { success: false, message: t.commands.unclose.noClosedCheckpoint() };
+        }
+
+        // If there's a currently active checkpoint, check its state.
         const active = await receiptRepo.getActiveCheckpoint(channelId);
         if (active) {
             const activeReceipts = await receiptRepo.getReceiptsForCheckpoint(active.id);
             if (activeReceipts.length > 0) {
+                // Active checkpoint already has receipts — can't unclose safely.
                 return {
                     success: false,
                     message: t.commands.unclose.hasActiveWithReceipts(active.id)
                 };
             }
-        }
-
-        const lastClosed = await receiptRepo.getLastClosedCheckpoint();
-        if (!lastClosed) {
-            return { success: false, message: t.commands.unclose.noClosedCheckpoint() };
+            // Active checkpoint is empty (accidental /start) — remove it so we
+            // can cleanly reopen the last closed one.
+            await receiptRepo.deleteCheckpoint(active.id);
         }
 
         await receiptRepo.reopenCheckpoint(lastClosed.id);

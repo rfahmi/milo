@@ -22,17 +22,23 @@ async function registerCommands() {
     try {
         console.log(`Started refreshing ${commands.length} application (/) commands.`);
 
-        // The put method is used to fully refresh all commands in the guild with the current set
-        // Note: Implicitly registers global commands if GuildId is not specified, but usually strictly better to use applicationCommands(clientId) for global
-        // or applicationGuildCommands(clientId, guildId) for guild specific.
-        // The previous code didn't specify guild ID so likely global.
+        const guildId = config.discord.guildId;
 
-        await rest.put(
-            Routes.applicationCommands(config.discord.applicationId),
-            { body: commands },
-        );
-
-        console.log(`Successfully reloaded ${commands.length} application (/) commands.`);
+        if (guildId) {
+            // Guild commands propagate instantly — preferred for single-server bots.
+            await rest.put(
+                Routes.applicationGuildCommands(config.discord.applicationId, guildId),
+                { body: commands },
+            );
+            console.log(`Successfully reloaded ${commands.length} guild (/) commands for guild ${guildId}.`);
+        } else {
+            // Fallback: global commands (up to 1 hour propagation delay).
+            await rest.put(
+                Routes.applicationCommands(config.discord.applicationId),
+                { body: commands },
+            );
+            console.log(`Successfully reloaded ${commands.length} global (/) commands.`);
+        }
     } catch (error) {
         console.error(error);
     }
