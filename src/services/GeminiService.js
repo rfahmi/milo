@@ -89,11 +89,8 @@ class GeminiService {
                     throw new Error('Image is not a valid receipt');
                 }
 
-                const clean = text.replace(/[Rp\.,\s]/gi, '');
-                const match = clean.match(/(\d+)/);
-
-                if (match) {
-                    const amount = parseFloat(match[1]);
+                const amount = this.parseAmount(text);
+                if (amount !== null) {
                     if (amount < 100 || amount > 100000000) {
                         throw new Error(`Extracted amount seems unreasonable: ${amount}. Original text: '${text}'`);
                     }
@@ -253,6 +250,40 @@ class GeminiService {
         } catch (e) {
             return { status: 'ERROR', latency: Date.now() - start, message: e.message };
         }
+    }
+
+    /**
+     * Parse a monetary amount string while respecting regional thousands/decimal delimiters
+     * (e.g. "148,000.00" or "148.000,00" -> 148000).
+     */
+    parseAmount(text) {
+        const cleaned = text.replace(/(?:IDR|Rp)/gi, '').replace(/[.,]-/g, '').trim();
+        const match = cleaned.match(/(\d[\d.,]*)/);
+        if (!match) return null;
+
+        let numStr = match[1];
+        const hasDot = numStr.includes('.');
+        const hasComma = numStr.includes(',');
+
+        if (hasDot && hasComma) {
+            // Whichever separator appears last is the decimal separator.
+            const decimalSep = numStr.lastIndexOf('.') > numStr.lastIndexOf(',') ? '.' : ',';
+            const thousandSep = decimalSep === '.' ? ',' : '.';
+            numStr = numStr.split(thousandSep).join('').replace(decimalSep, '.');
+        } else if (hasDot || hasComma) {
+            const sep = hasDot ? '.' : ',';
+            const parts = numStr.split(sep);
+            // Single separator with 1-2 trailing digits is a decimal (e.g. "148000.00");
+            // multiple separators or 3 trailing digits are thousands separators (e.g. "148.000").
+            if (parts.length === 2 && parts[1].length <= 2) {
+                numStr = `${parts[0]}.${parts[1]}`;
+            } else {
+                numStr = parts.join('');
+            }
+        }
+
+        const parsed = parseFloat(numStr);
+        return Number.isFinite(parsed) ? Math.round(parsed) : null;
     }
 
     getRandomFallback() {

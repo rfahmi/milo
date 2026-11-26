@@ -31,6 +31,18 @@ async function registerCommands() {
                 { body: commands },
             );
             console.log(`Successfully reloaded ${commands.length} guild (/) commands for guild ${guildId}.`);
+
+            // Remove any stale global commands so guild + global never appear duplicated.
+            const existingGlobal = await rest.get(
+                Routes.applicationCommands(config.discord.applicationId),
+            );
+            if (Array.isArray(existingGlobal) && existingGlobal.length > 0) {
+                await rest.put(
+                    Routes.applicationCommands(config.discord.applicationId),
+                    { body: [] },
+                );
+                console.log(`Cleared ${existingGlobal.length} stale global (/) command(s) to prevent duplicates.`);
+            }
         } else {
             // Fallback: global commands (up to 1 hour propagation delay).
             await rest.put(
