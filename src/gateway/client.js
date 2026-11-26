@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('../config');
 const receiptService = require('../services/ReceiptService');
+const gameService = require('../services/GameService');
 
 class DiscordClient {
     constructor() {
@@ -259,10 +260,22 @@ class DiscordClient {
 
             if (message.author.bot) return;
 
+            // Award passive chat tuna (60s cooldown per user)
+            gameService.rewardChat(message.author.id);
+
             const isReceiptChannel = !config.discord.channelId || message.channelId === config.discord.channelId;
+            const isGameChannel = !config.discord.gameChannelId || message.channelId === config.discord.gameChannelId;
 
             if (message.attachments.size === 0) {
                 try {
+                    if (isGameChannel) {
+                        const gameReply = await gameService.handleMessage(message);
+                        if (gameReply) {
+                            await message.reply(gameReply);
+                            return;
+                        }
+                    }
+
                     // Fetch history (limit 11 to get last 10 previous messages + current)
                     const history = await message.channel.messages.fetch({ limit: 11 });
                     const botId = this.client.user?.id;

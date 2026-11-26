@@ -165,6 +165,52 @@ function initSchema() {
       )
     `);
 
+        db.run(`
+      CREATE TABLE IF NOT EXISTS game_profiles (
+        user_id TEXT PRIMARY KEY,
+        tuna INTEGER NOT NULL DEFAULT 50,
+        last_chat_reward_at TEXT
+      )
+    `);
+
+        db.run(`
+      CREATE TABLE IF NOT EXISTS tcg_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        rarity TEXT NOT NULL,
+        image_url TEXT NOT NULL,
+        skill_name TEXT NOT NULL,
+        skill_desc TEXT NOT NULL,
+        flavor_text TEXT NOT NULL,
+        atk INTEGER NOT NULL,
+        sleep INTEGER NOT NULL,
+        recycle_value INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      )
+    `);
+
+        db.run(`
+      CREATE TABLE IF NOT EXISTS user_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
+        card_id INTEGER NOT NULL,
+        obtained_at TEXT NOT NULL,
+        FOREIGN KEY(card_id) REFERENCES tcg_cards(id)
+      )
+    `);
+
+        db.run(`
+      CREATE TABLE IF NOT EXISTS tcg_trades (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_user_id TEXT NOT NULL,
+        to_user_id TEXT NOT NULL,
+        from_user_card_id INTEGER NOT NULL,
+        to_user_card_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'PENDING',
+        created_at TEXT NOT NULL
+      )
+    `);
+
         // Create indexes for performance
         db.run(`
       CREATE INDEX IF NOT EXISTS idx_receipts_message_id 

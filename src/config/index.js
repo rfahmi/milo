@@ -34,6 +34,7 @@ module.exports = {
         publicKey: process.env.DISCORD_PUBLIC_KEY,
         applicationId: process.env.DISCORD_APPLICATION_ID,
         channelId: process.env.DISCORD_CHANNEL_ID,
+        gameChannelId: process.env.DISCORD_GAME_CHANNEL_ID,
         adminId: process.env.DISCORD_ADMIN_USER_ID,
         guildId: process.env.DISCORD_GUILD_ID,
     },
