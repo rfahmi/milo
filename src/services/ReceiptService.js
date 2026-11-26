@@ -226,17 +226,15 @@ class ReceiptService {
             }
         }
 
-        // 2. Fast pre-filter: ignore casual group chat not directed at Milo and without numbers
-        // Outside the receipt channel, only respond when explicitly addressing Milo.
+        // 2. Analyze text with Gemini (decides RECEIPT / ACTION / CHAT / IGNORE from context & history)
         const isReceiptChannel = meta.isReceiptChannel !== false;
-        const addressesMilo = meta.isMentioningMilo || meta.isReplyToMilo || /\bmilo\b/i.test(msg.content);
-        const mightBeReceipt = isReceiptChannel && /\d/.test(msg.content);
-        if (!addressesMilo && !mightBeReceipt) {
-            return null;
-        }
+        const addressedByName = /\bmilo\b/i.test(msg.content);
+        const analysis = await geminiService.analyzeText(msg.content, history, {
+            ...meta,
+            addressedByName
+        });
 
-        // 3. Analyze text with Gemini
-        const analysis = await geminiService.analyzeText(msg.content, history, meta);
+        console.log(`[DEBUG] analyzeText result: intent=${analysis.intent}, action=${analysis.action || 'none'}`);
 
         if (analysis.intent === 'IGNORE') {
             return null;

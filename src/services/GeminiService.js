@@ -201,6 +201,7 @@ class GeminiService {
             `Sender: ${authorName}`,
             `Mentioned Milo: ${meta.isMentioningMilo ? 'YES' : 'NO'}`,
             `Replied directly to Milo: ${meta.isReplyToMilo ? 'YES' : 'NO'}`,
+            `Addressed Milo by name: ${meta.addressedByName ? 'YES' : 'NO'}`,
             meta.replyTarget ? `Replying to message -> ${meta.replyTarget}` : null
         ].filter(Boolean).join('\n');
 
