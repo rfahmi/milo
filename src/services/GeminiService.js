@@ -3,6 +3,7 @@ const sharp = require('sharp');
 const config = require('../config');
 const t = require('../utils/translations');
 const memoryRepo = require('../data/repositories/MemoryRepository');
+const db = require('../data/db');
 
 class GeminiService {
     constructor() {
@@ -263,6 +264,112 @@ class GeminiService {
         }
 
         return { intent: 'CHAT', response: 'Rame. Otak ngebul. Bentar.' };
+    }
+
+    async searchWeb(query) {
+        if (!this.apiKey) return 'API key kosong.';
+
+        const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
+        const payload = {
+            contents: [{
+                parts: [{ text: `${t.gemini.webSearch}\n\nPertanyaan/Istilah: ${query}` }]
+            }],
+            tools: [{ google_search: {} }]
+        };
+
+        const maxRetries = 2;
+        let retryCount = 0;
+        let delay = 2000;
+
+        while (retryCount <= maxRetries) {
+            try {
+                const resp = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (resp.status === 429 || resp.status === '429') {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    retryCount++;
+                    delay *= 2;
+                    continue;
+                }
+
+                if (!resp.ok) {
+                    console.error('Gemini API error (searchWeb):', resp.status);
+                    return 'Gagal cari. Internet error.';
+                }
+
+                const json = await resp.json();
+                const answer = json.candidates?.[0]?.content?.parts
+                    ?.map(p => p.text)
+                    .filter(Boolean)
+                    .join('')
+                    .trim();
+
+                return answer || 'Gak ketemu.';
+            } catch (e) {
+                console.error('searchWeb exception:', e);
+                return 'Pusing. Gagal cari.';
+            }
+        }
+
+        return 'Rame. Coba bentar lagi.';
+    }
+
+    async queryDatabaseWithNL(question) {
+        if (!this.apiKey) return 'API key kosong.';
+
+        const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
+
+        try {
+            // 1. Generate read-only SELECT SQL
+            const sqlResp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: `${t.gemini.dbTextToSql}\n\nQuestion: ${question}` }] }]
+                })
+            });
+            if (!sqlResp.ok) return 'Otak error pas bikin query.';
+            const sqlJson = await sqlResp.json();
+            let sql = (sqlJson.candidates?.[0]?.content?.parts?.[0]?.text || '')
+                .replace(/```sql/gi, '')
+                .replace(/```/g, '')
+                .trim();
+
+            if (!sql) return 'Gak bisa bikin query-nya.';
+
+            // 2. Execute via read-only SQLite connection
+            let rows;
+            try {
+                rows = await db.allReadOnly(sql);
+            } catch (dbErr) {
+                console.warn('[GeminiService] Blocked/failed NL SQL:', sql, dbErr.message);
+                return 'Query ditolak atau error.';
+            }
+
+            // 3. Summarize result in Milo's caveman-cat voice
+            const ansResp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `${t.gemini.dbAnswer}\n\nQuestion: ${question}\nSQL: ${sql}\nResult Rows (JSON): ${JSON.stringify(rows.slice(0, 50))}`
+                        }]
+                    }]
+                })
+            });
+            if (!ansResp.ok) return 'Otak error pas baca hasil.';
+            const ansJson = await ansResp.json();
+            const answer = (ansJson.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
+            return answer || 'Kosong.';
+        } catch (e) {
+            console.error('queryDatabaseWithNL exception:', e);
+            return 'Pusing. Gagal cek DB.';
+        }
     }
 
     async healthCheck() {

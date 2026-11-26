@@ -205,12 +205,34 @@ function all(sql, params = []) {
     });
 }
 
+function allReadOnly(sql, params = []) {
+    const trimmed = (sql || '').trim().replace(/;+\s*$/, '');
+    if (!/^(?:SELECT|WITH)\b/i.test(trimmed) || trimmed.includes(';')) {
+        return Promise.reject(new Error('Only a single SELECT statement is allowed.'));
+    }
+    if (/\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|ATTACH|DETACH|PRAGMA|VACUUM)\b/i.test(trimmed)) {
+        return Promise.reject(new Error('Write or admin SQL keywords are not allowed.'));
+    }
+
+    return new Promise((resolve, reject) => {
+        const roDb = new sqlite3.Database(config.db.path, sqlite3.OPEN_READONLY, (openErr) => {
+            if (openErr) return reject(openErr);
+            roDb.all(trimmed, params, (err, rows) => {
+                roDb.close(() => {
+                    if (err) reject(err);
+                    else resolve(rows);
+                });
+            });
+        });
+    });
+}
+
 module.exports = {
     getDb,
     initSchema,
     run,
     get,
-    get,
     all,
+    allReadOnly,
     close,
 };

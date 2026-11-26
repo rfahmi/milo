@@ -373,6 +373,38 @@ class ReceiptService {
             return `Konfirmasi lupa (${matches.length} ingatan):\n${preview}${more}\nPermanen. Balas "ya" lanjut, "batal" batal.`;
         }
 
+        if (action === 'PICK_RANDOM') {
+            const options = Array.isArray(params.options)
+                ? params.options.map(o => String(o).trim()).filter(Boolean)
+                : [];
+            if (options.length < 2) return 'Kasih minimal 2 pilihan.';
+
+            const requested = Math.max(1, parseInt(params.count, 10) || 1);
+            const count = Math.min(requested, options.length);
+
+            // Fisher-Yates shuffle for unbiased unique picks
+            const pool = [...options];
+            for (let i = pool.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [pool[i], pool[j]] = [pool[j], pool[i]];
+            }
+
+            const picked = pool.slice(0, count).map(o => `**${o}**`).join(', ');
+            return `🪙 ${picked}.`;
+        }
+
+        if (action === 'WEB_SEARCH') {
+            const query = (params.query || msg.content || '').trim();
+            if (!query) return 'Cari apa. Sebut yang jelas.';
+            return await geminiService.searchWeb(query);
+        }
+
+        if (action === 'QUERY_DB') {
+            const question = (params.question || msg.content || '').trim();
+            if (!question) return 'Tanya apa. Sebut yang jelas.';
+            return await geminiService.queryDatabaseWithNL(question);
+        }
+
         // Destructive actions require admin authorization (when DISCORD_ADMIN_USER_ID is configured)
         if (config.discord.adminId && msg.author.id !== config.discord.adminId) {
             return 'Gak boleh. Bukan admin.';
