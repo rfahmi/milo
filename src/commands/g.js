@@ -11,7 +11,7 @@ module.exports = {
         )
         .addSubcommand(sub =>
             sub.setName('gacha')
-                .setDescription('Tarik 1 kartu cat-meme random (50 tuna).')
+                .setDescription('Tarik 1 kartu cat-meme random (10 tuna).')
         )
         .addSubcommand(sub =>
             sub.setName('cards')

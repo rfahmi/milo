@@ -2,16 +2,16 @@ const { AttachmentBuilder } = require('discord.js');
 const tcgRepo = require('../data/repositories/TcgRepository');
 const cardRenderer = require('./TcgCardRenderer');
 
-const GACHA_COST = 50;
-const CHAT_TUNA_REWARD = 3;
+const GACHA_COST = 10;
+const CHAT_TUNA_REWARD = 1;
 const CHAT_COOLDOWN_MS = 60 * 1000;
 
 const RARITY_TABLE = [
-    { rarity: 'SS', weight: 2, atkMin: 88, atkMax: 100, sleepMin: 88, sleepMax: 100, recycle: 200 },
-    { rarity: 'S', weight: 6, atkMin: 70, atkMax: 90, sleepMin: 70, sleepMax: 92, recycle: 100 },
-    { rarity: 'A', weight: 14, atkMin: 50, atkMax: 75, sleepMin: 50, sleepMax: 78, recycle: 50 },
-    { rarity: 'B', weight: 28, atkMin: 30, atkMax: 55, sleepMin: 30, sleepMax: 60, recycle: 25 },
-    { rarity: 'C', weight: 50, atkMin: 10, atkMax: 35, sleepMin: 15, sleepMax: 45, recycle: 10 }
+    { rarity: 'SS', weight: 2, atkMin: 88, atkMax: 100, sleepMin: 88, sleepMax: 100, recycle: 40 },
+    { rarity: 'S', weight: 6, atkMin: 70, atkMax: 90, sleepMin: 70, sleepMax: 92, recycle: 20 },
+    { rarity: 'A', weight: 14, atkMin: 50, atkMax: 75, sleepMin: 50, sleepMax: 78, recycle: 10 },
+    { rarity: 'B', weight: 28, atkMin: 30, atkMax: 55, sleepMin: 30, sleepMax: 60, recycle: 5 },
+    { rarity: 'C', weight: 50, atkMin: 10, atkMax: 35, sleepMin: 15, sleepMax: 45, recycle: 2 }
 ];
 
 const CARD_TEMPLATES = {
