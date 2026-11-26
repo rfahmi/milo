@@ -1,6 +1,7 @@
 const { AttachmentBuilder } = require('discord.js');
 const tcgRepo = require('../data/repositories/TcgRepository');
 const cardRenderer = require('./TcgCardRenderer');
+const geminiService = require('./GeminiService');
 
 const GACHA_COST = 10;
 const CHAT_TUNA_REWARD = 1;
@@ -17,23 +18,37 @@ const RARITY_TABLE = [
 const CARD_TEMPLATES = {
     SS: [
         { name: 'Milo Raja Tidur', tag: 'sleepy', skill: 'Tidur Abadi', desc: 'Cuek maksimal. Bangun cuma pas denger kaleng tuna.', flavor: 'Tidur. Jangan ganggu.' },
-        { name: 'Tutu Bayangan', tag: 'black', skill: 'Mode Ninja Hitam', desc: 'Hilang di ruangan gelap. Cuma kelihatan mata kuning.', flavor: 'Gelap. Gak kelihatan.' }
+        { name: 'Tutu Bayangan', tag: 'black', skill: 'Mode Ninja Hitam', desc: 'Hilang di ruangan gelap. Cuma kelihatan mata kuning.', flavor: 'Gelap. Gak kelihatan.' },
+        { name: 'Kaisar Kucing Oren', tag: 'orange', skill: 'Otak Satu Sel', desc: 'Bikin rusuh satu rumah tapi tetep disayang.', flavor: 'Rusuh. Bodo amat.' },
+        { name: 'Milo Sultan Tuna', tag: 'persian', skill: 'Makan Mewah', desc: 'Nolak dry food murah. Maunya tuna kaleng.', flavor: 'Murah. Gak mau.' }
     ],
     S: [
         { name: 'Kuki Ragdoll', tag: 'fluffy', skill: 'Tatapan Polos', desc: 'Duduk manis di depan mangkok kosong sampai dikasih makan.', flavor: 'Lapar. Mangkok kosong.' },
-        { name: 'Milo Tabby Bos', tag: 'tabby', skill: 'Audit Struk', desc: 'Lirik struk belanjaan sambil nge-judge pengeluaran.', flavor: 'Boros. Kurangin jajan.' }
+        { name: 'Milo Tabby Bos', tag: 'tabby', skill: 'Audit Struk', desc: 'Lirik struk belanjaan sambil nge-judge pengeluaran.', flavor: 'Boros. Kurangin jajan.' },
+        { name: 'Kucing Bos Mafia', tag: 'serious', skill: 'Tagih Pajak', desc: 'Minta jatah ikan tiap kali majikan buka kulkas.', flavor: 'Mana. Bagian aku.' },
+        { name: 'Kucing Kacamata', tag: 'sunglasses', skill: 'Mode Santai', desc: 'Tetap kalem walau baru aja mecahin gelas.', flavor: 'Santai. Bukan aku.' }
     ],
     A: [
         { name: 'Kucing Polite', tag: 'cute', skill: 'Senyum Sopan', desc: 'Nolak halus tapi tetap ambil makanan di meja.', flavor: 'Permisi. Ambil tuna.' },
-        { name: 'Kucing Zoomies', tag: 'jump', skill: 'Lari Jam 3 Pagi', desc: 'Sprint keliling rumah tanpa alasan jelas.', flavor: 'Lari. Nabrak tembok.' }
+        { name: 'Kucing Zoomies', tag: 'jump', skill: 'Lari Jam 3 Pagi', desc: 'Sprint keliling rumah tanpa alasan jelas.', flavor: 'Lari. Nabrak tembok.' },
+        { name: 'Kucing Kardus', tag: 'box', skill: 'Masuk Kotak Sempit', desc: 'Muat di kardus sekecil apa pun dengan bangga.', flavor: 'Sempit. Tapi nyaman.' },
+        { name: 'Kucing Ngintip', tag: 'hiding', skill: 'Mata-Mata Pintu', desc: 'Ngawasin majikan dari balik pintu kamar mandi.', flavor: 'Liatin. Terus.' },
+        { name: 'Kucing Loaf', tag: 'loaf', skill: 'Roti Tawar', desc: 'Ngumpetin semua kaki biar mirip roti panggang.', flavor: 'Roti. Jangan pegang.' }
     ],
     B: [
         { name: 'Huh Cat', tag: 'confused', skill: 'Hah Mode', desc: 'Muter kepala pas ditanya siapa yang numpahin air.', flavor: 'Hah. Bukan aku.' },
-        { name: 'Kucing Marah', tag: 'angry', skill: 'Cakar Sofa', desc: 'Ngegas kalau pintu kamar ditutup.', flavor: 'Buka. Sekarang.' }
+        { name: 'Kucing Marah', tag: 'angry', skill: 'Cakar Sofa', desc: 'Ngegas kalau pintu kamar ditutup.', flavor: 'Buka. Sekarang.' },
+        { name: 'Kucing Kaget', tag: 'shocked', skill: 'Mata Melotot', desc: 'Loncat tinggi gara-gara lihat timun di lantai.', flavor: 'Kaget. Itu apaan.' },
+        { name: 'Kucing Ngemis', tag: 'begging', skill: 'Cakar Lutut', desc: 'Narik celana pas majikan lagi makan ayam.', flavor: 'Bagi. Dikit aja.' },
+        { name: 'Kucing Jutek', tag: 'grumpy', skill: 'Muka Bete', desc: 'Noleh ke tembok pas dipanggil namanya.', flavor: 'Males. Jangan panggil.' }
     ],
     C: [
         { name: 'Kucing Nangis', tag: 'sad', skill: 'Meow Sedih', desc: 'Muka melas minta nambah jatah makan malam.', flavor: 'Sedih. Minta tuna.' },
-        { name: 'Kucing Rebahan', tag: 'sleeping', skill: 'Nempel Lantai', desc: 'Gak mau gerak seharian di tengah ruang tamu.', flavor: 'Males. Geser sana.' }
+        { name: 'Kucing Rebahan', tag: 'sleeping', skill: 'Nempel Lantai', desc: 'Gak mau gerak seharian di tengah ruang tamu.', flavor: 'Males. Geser sana.' },
+        { name: 'Kucing Bengong', tag: 'stare', skill: 'Natap Tembok', desc: 'Melamun ngeliatin tembok kosong selama 20 menit.', flavor: 'Kosong. Kayak dompet.' },
+        { name: 'Kucing Melet', tag: 'blep', skill: 'Lupa Masuk Lidah', desc: 'Lidahnya nongol dikit habis jilat bulu.', flavor: 'Blep. Lupa.' },
+        { name: 'Kucing Kepo', tag: 'curious', skill: 'Endus Tas', desc: 'Harus ngecek isi semua kantong belanjaan baru.', flavor: 'Apa tuh. Sini cek.' },
+        { name: 'Kucing Lapar', tag: 'hungry', skill: 'Gigit Kardus', desc: 'Ngunyah kardus paket gara-gara telat makan.', flavor: 'Lapar. Makan apa aja.' }
     ]
 };
 
@@ -143,18 +158,19 @@ class GameService {
         const tpl = pool[Math.floor(Math.random() * pool.length)];
         const excludedUrls = await tcgRepo.getImageUrlsUsedByOtherRarities(tier.rarity);
         const meme = await cardRenderer.fetchRandomCatMeme(tier.rarity, excludedUrls, tpl.tag);
+        const artBuffer = await cardRenderer.downloadArtBuffer(meme.url);
 
-        const cardName = meme.fromReddit && meme.title
-            ? meme.title.slice(0, 24).trim()
-            : tpl.name;
+        // Use Gemini Vision to generate name/skill/flavor that actually matches the cat photo
+        const aiMeta = await geminiService.describeCatMemeCard(artBuffer, tier.rarity);
+        const cardName = aiMeta?.name || (meme.fromReddit && meme.title ? meme.title.slice(0, 24).trim() : tpl.name);
 
         const cardData = {
             name: cardName,
             rarity: tier.rarity,
             image_url: meme.url,
-            skill_name: tpl.skill,
-            skill_desc: tpl.desc,
-            flavor_text: tpl.flavor,
+            skill_name: aiMeta?.skill || tpl.skill,
+            skill_desc: aiMeta?.desc || tpl.desc,
+            flavor_text: aiMeta?.flavor || tpl.flavor,
             atk: randInt(tier.atkMin, tier.atkMax),
             sleep: randInt(tier.sleepMin, tier.sleepMax),
             recycle_value: tier.recycle
@@ -162,7 +178,7 @@ class GameService {
 
         const updated = await tcgRepo.addTuna(userId, -GACHA_COST);
         const { userCardId } = await tcgRepo.createCardAndAssign(userId, cardData);
-        const pngBuffer = await cardRenderer.renderCardPng({ ...cardData, user_card_id: userCardId });
+        const pngBuffer = await cardRenderer.renderCardPng({ ...cardData, user_card_id: userCardId }, artBuffer);
 
         const attachment = new AttachmentBuilder(pngBuffer, { name: `milo-card-${userCardId}.jpg` });
         return {

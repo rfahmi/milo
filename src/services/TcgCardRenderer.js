@@ -181,7 +181,7 @@ class TcgCardRenderer {
         return null;
     }
 
-    async renderCardPng(card) {
+    async renderCardPng(card, preloadedArtBuffer = null) {
         const style = RARITY_STYLES[card.rarity] || RARITY_STYLES.C;
         const skillLines = wrapText(card.skill_desc, 36);
         const title = escapeXml(String(card.name).slice(0, 24));
@@ -228,7 +228,7 @@ class TcgCardRenderer {
   <text x="307" y="555" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="bold" fill="#7dd3fc" text-anchor="middle">SLEEP  ${card.sleep}</text>
 </svg>`;
 
-        const artBuffer = await this.downloadArtBuffer(card.image_url);
+        const artBuffer = preloadedArtBuffer || await this.downloadArtBuffer(card.image_url);
         const base = sharp(Buffer.from(svg));
         if (artBuffer) {
             return await base

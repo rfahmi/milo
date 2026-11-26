@@ -380,6 +380,56 @@ class GeminiService {
         }
     }
 
+    async describeCatMemeCard(imageBuffer, rarity) {
+        if (!this.apiKey || !imageBuffer) return null;
+
+        const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
+        const prompt =
+            `Look at this cat photo/meme and create a funny Indonesian TCG card for it (Rarity: ${rarity}).\n` +
+            `The name, skill, description, and flavor MUST match what the cat is actually doing or looking like in the image.\n` +
+            `Rules:\n` +
+            `- "name": short catchy Indonesian card name (2-4 words, max 22 chars, e.g. "Kucing Kacamata", "Oren Tidur Pulas").\n` +
+            `- "skill": short skill name (2-3 words, max 20 chars).\n` +
+            `- "desc": 1 short Indonesian sentence describing the skill based on the cat's pose/expression (max 65 chars).\n` +
+            `- "flavor": ultra-short caveman-cat quote in Milo's voice (2-4 words, max 28 chars, e.g. "Santai. Jangan iri.").\n` +
+            `Output JSON ONLY:\n` +
+            `{"name":"...","skill":"...","desc":"...","flavor":"..."}`;
+
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [
+                            { text: prompt },
+                            { inline_data: { mime_type: 'image/png', data: imageBuffer.toString('base64') } }
+                        ]
+                    }]
+                })
+            });
+            if (!resp.ok) return null;
+            const json = await resp.json();
+            const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text || '')
+                .replace(/```json/gi, '')
+                .replace(/```/g, '')
+                .trim();
+            const parsed = JSON.parse(raw);
+            if (parsed?.name && parsed?.skill && parsed?.desc && parsed?.flavor) {
+                return {
+                    name: String(parsed.name).slice(0, 24).trim(),
+                    skill: String(parsed.skill).slice(0, 22).trim(),
+                    desc: String(parsed.desc).slice(0, 72).trim(),
+                    flavor: String(parsed.flavor).slice(0, 32).trim()
+                };
+            }
+            return null;
+        } catch (e) {
+            console.warn('[GeminiService] describeCatMemeCard failed:', e.message);
+            return null;
+        }
+    }
+
     async healthCheck() {
         if (!this.apiKey) return { status: 'CONFIG_ERROR', message: 'API Key missing' };
 
