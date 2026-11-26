@@ -230,8 +230,16 @@ class DiscordClient {
             // console.log(interaction);
             if (!interaction.isChatInputCommand()) return;
 
-            // Enforce Channel Restriction if configured
-            if (config.discord.channelId && interaction.channelId !== config.discord.channelId) {
+            // Enforce Channel Restriction: /g works in gameChannelId (or any channel if unset);
+            // receipt/admin commands stay restricted to DISCORD_CHANNEL_ID.
+            if (interaction.commandName === 'g') {
+                if (config.discord.gameChannelId && interaction.channelId !== config.discord.gameChannelId) {
+                    return interaction.reply({
+                        content: `⚠️ Game hanya aktif di <#${config.discord.gameChannelId}>.`,
+                        ephemeral: true
+                    });
+                }
+            } else if (config.discord.channelId && interaction.channelId !== config.discord.channelId) {
                 return interaction.reply({
                     content: `⚠️ Bot ini hanya aktif di <#${config.discord.channelId}>.`,
                     ephemeral: true
@@ -264,18 +272,9 @@ class DiscordClient {
             gameService.rewardChat(message.author.id);
 
             const isReceiptChannel = !config.discord.channelId || message.channelId === config.discord.channelId;
-            const isGameChannel = !config.discord.gameChannelId || message.channelId === config.discord.gameChannelId;
 
             if (message.attachments.size === 0) {
                 try {
-                    if (isGameChannel) {
-                        const gameReply = await gameService.handleMessage(message);
-                        if (gameReply) {
-                            await message.reply(gameReply);
-                            return;
-                        }
-                    }
-
                     // Fetch history (limit 11 to get last 10 previous messages + current)
                     const history = await message.channel.messages.fetch({ limit: 11 });
                     const botId = this.client.user?.id;

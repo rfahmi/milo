@@ -70,6 +70,12 @@ class GameService {
         }
     }
 
+    async handleTuna(userId) {
+        const p = await tcgRepo.getOrCreateProfile(userId);
+        const count = await tcgRepo.getUserCardCount(userId);
+        return `Saldo: **${p.tuna} tuna**. Koleksi: **${count} kartu**.`;
+    }
+
     async handleMessage(message) {
         const parsed = this.parseCommand(message.content);
         if (!parsed) return null;
@@ -129,7 +135,7 @@ class GameService {
     async handleGacha(userId) {
         const profile = await tcgRepo.getOrCreateProfile(userId);
         if (profile.tuna < GACHA_COST) {
-            return `Tuna kurang. Saldo **${profile.tuna} tuna**, butuh **${GACHA_COST} tuna**. Chat dulu atau \`m sell <id>\`.`;
+            return `Tuna kurang. Saldo **${profile.tuna} tuna**, butuh **${GACHA_COST} tuna**. Chat dulu atau \`/g sell <id>\`.`;
         }
 
         const tier = rollRarity();
@@ -168,7 +174,7 @@ class GameService {
     async handleListCards(userId) {
         const cards = await tcgRepo.getUserCards(userId);
         if (cards.length === 0) {
-            return 'Kosong. Belum punya kartu. Ketik `m gacha`.';
+            return 'Kosong. Belum punya kartu. Pakai `/g gacha`.';
         }
         const lines = cards.slice(0, 20).map(c =>
             `- **#${c.user_card_id}** ${c.name} [${c.rarity}] (ATK ${c.atk} | Recycle ${c.recycle_value} tuna)`
@@ -206,26 +212,33 @@ class GameService {
         return `Recycle **#${id} ${card.name}** -> +**${card.recycle_value} tuna**. Saldo: **${updated.tuna} tuna**.`;
     }
 
-    async handleTrade(message, args) {
-        const targetUser = message.mentions.users.first();
-        if (!targetUser || targetUser.bot || targetUser.id === message.author.id) {
-            return 'Format: `m trade @user <id_kartu_kamu> <id_kartu_dia>`';
+    async handleTradeOffer(fromUserId, targetUser, myCardId, theirCardId) {
+        if (!targetUser || targetUser.bot || targetUser.id === fromUserId) {
+            return 'User target gak valid.';
         }
 
-        const numericArgs = args.filter(a => !a.startsWith('<@')).map(a => parseInt(a.replace('#', ''), 10)).filter(Boolean);
-        if (numericArgs.length < 2) {
-            return 'Format: `m trade @user <id_kartu_kamu> <id_kartu_dia>`';
-        }
-
-        const [myCardId, theirCardId] = numericArgs;
-        const myCard = await tcgRepo.getUserCardById(myCardId, message.author.id);
+        const myCard = await tcgRepo.getUserCardById(myCardId, fromUserId);
         if (!myCard) return `Kartu #${myCardId} bukan punyamu.`;
 
         const theirCard = await tcgRepo.getUserCardById(theirCardId, targetUser.id);
         if (!theirCard) return `Kartu #${theirCardId} bukan punya <@${targetUser.id}>.`;
 
-        await tcgRepo.createTrade(message.author.id, targetUser.id, myCardId, theirCardId);
-        return `Tawaran tukar untuk <@${targetUser.id}>:\n- Kamu dapat: **#${myCardId} ${myCard.name}** [${myCard.rarity}]\n- Kamu kasih: **#${theirCardId} ${theirCard.name}** [${theirCard.rarity}]\nKetik \`m accept\` untuk setuju, atau \`m decline\` untuk batal.`;
+        await tcgRepo.createTrade(fromUserId, targetUser.id, myCardId, theirCardId);
+        return `Tawaran tukar untuk <@${targetUser.id}>:\n- Kamu dapat: **#${myCardId} ${myCard.name}** [${myCard.rarity}]\n- Kamu kasih: **#${theirCardId} ${theirCard.name}** [${theirCard.rarity}]\nPakai \`/g accept\` untuk setuju, atau \`/g decline\` untuk batal.`;
+    }
+
+    async handleTrade(message, args) {
+        const targetUser = message.mentions.users.first();
+        if (!targetUser || targetUser.bot || targetUser.id === message.author.id) {
+            return 'Format: `/g trade @user <id_kartu_kamu> <id_kartu_dia>`';
+        }
+
+        const numericArgs = args.filter(a => !a.startsWith('<@')).map(a => parseInt(a.replace('#', ''), 10)).filter(Boolean);
+        if (numericArgs.length < 2) {
+            return 'Format: `/g trade @user <id_kartu_kamu> <id_kartu_dia>`';
+        }
+
+        return await this.handleTradeOffer(message.author.id, targetUser, numericArgs[0], numericArgs[1]);
     }
 
     async handleAcceptTrade(userId) {
