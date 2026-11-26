@@ -5,7 +5,7 @@ class TcgRepository {
         let profile = await db.get('SELECT * FROM game_profiles WHERE user_id = ?', [userId]);
         if (!profile) {
             await db.run(
-                'INSERT OR IGNORE INTO game_profiles (user_id, tuna, last_chat_reward_at) VALUES (?, 50, NULL)',
+                'INSERT OR IGNORE INTO game_profiles (user_id, tuna, last_chat_reward_at, pity_count) VALUES (?, 50, NULL, 0)',
                 [userId]
             );
             profile = await db.get('SELECT * FROM game_profiles WHERE user_id = ?', [userId]);
@@ -34,6 +34,13 @@ class TcgRepository {
             [delta, userId]
         );
         return await this.getOrCreateProfile(userId);
+    }
+
+    async setPityCount(userId, pityCount) {
+        await db.run(
+            'UPDATE game_profiles SET pity_count = ? WHERE user_id = ?',
+            [pityCount, userId]
+        );
     }
 
     async createCardAndAssign(userId, card) {

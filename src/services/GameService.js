@@ -6,6 +6,7 @@ const geminiService = require('./GeminiService');
 const GACHA_COST = 10;
 const CHAT_TUNA_REWARD = 1;
 const CHAT_COOLDOWN_MS = 60 * 1000;
+const PITY_LIMIT = 20;
 
 const RARITY_TABLE = [
     { rarity: 'SS', weight: 2, atkMin: 88, atkMax: 100, sleepMin: 88, sleepMax: 100, recycle: 40 },
@@ -56,7 +57,13 @@ function randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function rollRarity() {
+function rollRarity(pityCount = 0) {
+    if (pityCount >= PITY_LIMIT - 1) {
+        // Hard pity on 10th pull: guaranteed S (80%) or SS (20%)
+        return Math.random() < 0.2
+            ? RARITY_TABLE.find(t => t.rarity === 'SS')
+            : RARITY_TABLE.find(t => t.rarity === 'S');
+    }
     const roll = Math.random() * 100;
     let acc = 0;
     for (const tier of RARITY_TABLE) {
@@ -88,7 +95,7 @@ class GameService {
     async handleTuna(userId) {
         const p = await tcgRepo.getOrCreateProfile(userId);
         const count = await tcgRepo.getUserCardCount(userId);
-        return `Saldo: **${p.tuna} tuna**. Koleksi: **${count} kartu**.`;
+        return `Saldo: **${p.tuna} tuna**. Koleksi: **${count} kartu**. Pity S/SS: **${p.pity_count || 0}/${PITY_LIMIT}**.`;
     }
 
     async handleMessage(message) {
@@ -153,7 +160,11 @@ class GameService {
             return `Tuna kurang. Saldo **${profile.tuna} tuna**, butuh **${GACHA_COST} tuna**. Chat dulu atau \`/g sell <id>\`.`;
         }
 
-        const tier = rollRarity();
+        const currentPity = profile.pity_count || 0;
+        const pityTriggered = currentPity >= PITY_LIMIT - 1;
+        const tier = rollRarity(currentPity);
+        const nextPity = (tier.rarity === 'S' || tier.rarity === 'SS') ? 0 : currentPity + 1;
+
         const pool = CARD_TEMPLATES[tier.rarity] || CARD_TEMPLATES.C;
         const tpl = pool[Math.floor(Math.random() * pool.length)];
         const excludedUrls = await tcgRepo.getImageUrlsUsedByOtherRarities(tier.rarity);
@@ -177,12 +188,14 @@ class GameService {
         };
 
         const updated = await tcgRepo.addTuna(userId, -GACHA_COST);
+        await tcgRepo.setPityCount(userId, nextPity);
         const { userCardId } = await tcgRepo.createCardAndAssign(userId, cardData);
         const pngBuffer = await cardRenderer.renderCardPng({ ...cardData, user_card_id: userCardId }, artBuffer);
 
         const attachment = new AttachmentBuilder(pngBuffer, { name: `milo-card-${userCardId}.jpg` });
+        const pityNote = pityTriggered ? ' [PITY!]' : '';
         return {
-            content: `Dapet **#${userCardId} ${cardData.name}** [${cardData.rarity}]. Sisa saldo: **${updated.tuna} tuna**.`,
+            content: `Dapet **#${userCardId} ${cardData.name}** [${cardData.rarity}]${pityNote}. Sisa saldo: **${updated.tuna} tuna** (Pity: ${nextPity}/${PITY_LIMIT}).`,
             files: [attachment]
         };
     }

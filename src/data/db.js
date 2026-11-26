@@ -169,9 +169,16 @@ function initSchema() {
       CREATE TABLE IF NOT EXISTS game_profiles (
         user_id TEXT PRIMARY KEY,
         tuna INTEGER NOT NULL DEFAULT 50,
-        last_chat_reward_at TEXT
+        last_chat_reward_at TEXT,
+        pity_count INTEGER NOT NULL DEFAULT 0
       )
     `);
+
+        db.run("ALTER TABLE game_profiles ADD COLUMN pity_count INTEGER NOT NULL DEFAULT 0", (err) => {
+            if (err && !err.message.includes('duplicate column name')) {
+                console.log('Migration note:', err.message);
+            }
+        });
 
         db.run(`
       CREATE TABLE IF NOT EXISTS tcg_cards (
