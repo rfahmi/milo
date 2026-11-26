@@ -269,13 +269,34 @@ class DiscordClient {
                 try {
                     // Fetch history (limit 11 to get last 10 previous messages + current)
                     const history = await message.channel.messages.fetch({ limit: 11 });
+                    const botId = this.client.user?.id;
 
-                    // Convert Collection to Array, reverse to chronological, filter out current & bots
+                    // Keep Milo's own messages for conversational memory; drop other bots and current msg
                     const historyArray = Array.from(history.values())
                         .reverse()
-                        .filter(m => m.id !== message.id && !m.author.bot);
+                        .filter(m => m.id !== message.id && (!m.author.bot || m.author.id === botId));
 
-                    const response = await receiptService.processText(message, message.channelId, historyArray);
+                    const isMentioningMilo = botId ? message.mentions.has(botId) : false;
+                    let isReplyToMilo = false;
+                    let replyTarget = null;
+                    if (message.reference?.messageId) {
+                        const referenced = history.get(message.reference.messageId)
+                            || await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+                        if (referenced) {
+                            isReplyToMilo = referenced.author.id === botId;
+                            const refAuthor = referenced.author.id === botId
+                                ? 'Milo'
+                                : (referenced.member?.displayName || referenced.author.globalName || referenced.author.username);
+                            replyTarget = `${refAuthor}: ${referenced.content}`;
+                        }
+                    }
+
+                    const response = await receiptService.processText(
+                        message,
+                        message.channelId,
+                        historyArray,
+                        { authorName: displayName, botId, isMentioningMilo, isReplyToMilo, replyTarget }
+                    );
 
                     if (response) {
                         await message.reply(response);

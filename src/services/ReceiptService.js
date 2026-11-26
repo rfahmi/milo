@@ -174,7 +174,7 @@ class ReceiptService {
         return null;
     }
 
-    async processText(msg, channelId, history) {
+    async processText(msg, channelId, history, meta = {}) {
         const conversationRepo = require('../data/repositories/ConversationRepository');
 
         // 1. Check for active state (e.g., waiting for description)
@@ -211,10 +211,14 @@ class ReceiptService {
         }
 
         // 2. No active state, analyze text
-        const analysis = await geminiService.analyzeText(msg.content, history);
+        const analysis = await geminiService.analyzeText(msg.content, history, meta);
+
+        if (analysis.intent === 'IGNORE') {
+            return null;
+        }
 
         if (analysis.intent === 'CHAT') {
-            return analysis.response;
+            return analysis.response || null;
         }
 
         if (analysis.intent === 'RECEIPT') {

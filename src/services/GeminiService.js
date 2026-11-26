@@ -158,14 +158,29 @@ class GeminiService {
         }
     }
 
-    async analyzeText(text, history) {
-        if (!this.apiKey) return { intent: 'CHAT', response: 'Gapunya API Key woy.' };
+    async analyzeText(text, history, meta = {}) {
+        if (!this.apiKey) return { intent: 'CHAT', response: 'API key kosong.' };
 
         const url = `${this.baseUrl}/${this.model}:generateContent?key=${this.apiKey}`;
 
-        // Format history
-        const context = history.map(msg => `User (${msg.author.username}): ${msg.content}`).join('\n');
-        const prompt = `${t.gemini.textAnalysis}\n\nChat History:\n${context}\n\nCurrent Input: ${text}`;
+        // Format history including Milo's own previous messages for conversational memory
+        const context = history.map(msg => {
+            if (meta.botId && msg.author.id === meta.botId) {
+                return `Milo (you): ${msg.content}`;
+            }
+            const name = msg.member?.displayName || msg.author.globalName || msg.author.username;
+            return `${name}: ${msg.content}`;
+        }).join('\n');
+
+        const authorName = meta.authorName || 'User';
+        const contextFlags = [
+            `Sender: ${authorName}`,
+            `Mentioned Milo: ${meta.isMentioningMilo ? 'YES' : 'NO'}`,
+            `Replied directly to Milo: ${meta.isReplyToMilo ? 'YES' : 'NO'}`,
+            meta.replyTarget ? `Replying to message -> ${meta.replyTarget}` : null
+        ].filter(Boolean).join('\n');
+
+        const prompt = `${t.gemini.textAnalysis}\n\nChat History:\n${context || '(empty)'}\n\nCurrent Message Context:\n${contextFlags}\nCurrent Input: ${text}`;
 
         const payload = {
             contents: [{
@@ -195,7 +210,7 @@ class GeminiService {
 
                 if (!resp.ok) {
                     console.error('Gemini API error (analyzeText):', resp.status);
-                    return { intent: 'CHAT', response: 'Lagi error nih otak aku.' };
+                    return { intent: 'CHAT', response: 'Otak error.' };
                 }
 
                 const json = await resp.json();
@@ -207,16 +222,16 @@ class GeminiService {
                     return JSON.parse(rawText);
                 } catch (e) {
                     console.error('Failed to parse JSON from Gemini:', rawText);
-                    return { intent: 'CHAT', response: rawText || 'Hah?' };
+                    return { intent: 'CHAT', response: rawText || 'Hah.' };
                 }
 
             } catch (e) {
                 console.error('analyzeText exception:', e);
-                return { intent: 'CHAT', response: 'Lagi pusing aku.' };
+                return { intent: 'CHAT', response: 'Pusing.' };
             }
         }
 
-        return { intent: 'CHAT', response: 'Lagi rame banget nih, otak aku ngebul. Coba bentar lagi ya.' };
+        return { intent: 'CHAT', response: 'Rame. Otak ngebul. Bentar.' };
     }
 
     async healthCheck() {
