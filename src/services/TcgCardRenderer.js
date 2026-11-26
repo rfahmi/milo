@@ -69,7 +69,7 @@ function wrapText(text, maxLen = 40) {
 }
 
 class TcgCardRenderer {
-    async fetchRandomCatMeme(rarity = 'C', excludedUrls = new Set()) {
+    async fetchRandomCatMeme(rarity = 'C', excludedUrls = new Set(), tag = 'cute') {
         const now = Date.now();
         if (memeCache.items.length === 0 || (now - memeCache.fetchedAt) > CACHE_TTL_MS) {
             const collected = [];
@@ -122,23 +122,51 @@ class TcgCardRenderer {
                 .filter(item => !excludedUrls.has(item.url));
 
             if (bucket.length > 0) {
-                return bucket[Math.floor(Math.random() * bucket.length)];
+                const pick = bucket[Math.floor(Math.random() * bucket.length)];
+                return { ...pick, fromReddit: true };
+            }
+        }
+
+        const safeTag = encodeURIComponent(tag || 'cute');
+        const cataasJsonUrls = [
+            `https://cataas.com/cat/${safeTag}?json=true`,
+            'https://cataas.com/cat?json=true'
+        ];
+        for (const jsonUrl of cataasJsonUrls) {
+            try {
+                const resp = await fetch(jsonUrl, {
+                    headers: { 'User-Agent': 'MiloDiscordBot/1.0' },
+                    timeout: 8000
+                });
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                const catId = data?._id || data?.id;
+                if (catId) {
+                    return {
+                        url: `https://cataas.com/cat/${catId}?width=420`,
+                        title: 'Random Cat',
+                        fromReddit: false
+                    };
+                }
+            } catch (e) {
+                console.warn(`[TcgCardRenderer] cataas json lookup failed (${jsonUrl}):`, e.message);
             }
         }
 
         return {
-            url: `https://cataas.com/cat?rarity=${encodeURIComponent(rarity)}&t=${Date.now()}`,
-            title: 'Random Cat'
+            url: `https://cataas.com/cat/${safeTag}?width=420&rarity=${encodeURIComponent(rarity)}&t=${Date.now()}`,
+            title: 'Random Cat',
+            fromReddit: false
         };
     }
 
     async downloadArtBuffer(imageUrl) {
-        const targets = [imageUrl, `https://cataas.com/cat?t=${Date.now()}`];
+        const targets = [imageUrl, `https://cataas.com/cat?width=420&t=${Date.now()}`];
         for (const url of targets) {
             try {
                 const resp = await fetch(url, {
                     headers: { 'User-Agent': 'MiloDiscordBot/1.0' },
-                    timeout: 7000
+                    timeout: 12000
                 });
                 if (!resp.ok) continue;
                 const buf = await resp.buffer();
@@ -155,7 +183,7 @@ class TcgCardRenderer {
 
     async renderCardPng(card) {
         const style = RARITY_STYLES[card.rarity] || RARITY_STYLES.C;
-        const skillLines = wrapText(card.skill_desc, 42);
+        const skillLines = wrapText(card.skill_desc, 36);
         const title = escapeXml(String(card.name).slice(0, 24));
         const rarityLabel = escapeXml(card.rarity);
         const cardNum = String(card.user_card_id || card.id || 1).padStart(3, '0');
@@ -177,27 +205,27 @@ class TcgCardRenderer {
   <rect x="10" y="10" width="400" height="580" rx="16" fill="url(#bgGrad)"/>
 
   <rect x="24" y="24" width="372" height="44" rx="10" fill="#1e293b" stroke="${style.border1}" stroke-width="2"/>
-  <text x="38" y="52" font-family="Arial, sans-serif" font-size="19" font-weight="bold" fill="#f8fafc">${title}</text>
+  <text x="38" y="52" font-family="DejaVu Sans, Arial, sans-serif" font-size="19" font-weight="bold" fill="#f8fafc">${title}</text>
   <rect x="328" y="32" width="56" height="28" rx="6" fill="${style.badgeBg}"/>
-  <text x="356" y="52" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="${style.badgeText}" text-anchor="middle">${rarityLabel}</text>
+  <text x="356" y="52" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="bold" fill="${style.badgeText}" text-anchor="middle">${rarityLabel}</text>
 
   <rect x="24" y="80" width="372" height="270" rx="12" fill="#0f172a" stroke="${style.border1}" stroke-width="3"/>
 
-  <text x="28" y="376" font-family="Arial, sans-serif" font-size="13" font-weight="bold" fill="${style.accent}">CAT MEME  •  #${cardNum}</text>
-  <text x="392" y="376" font-family="Arial, sans-serif" font-size="13" fill="#94a3b8" text-anchor="end">Recycle: ${card.recycle_value} tuna</text>
+  <text x="28" y="376" font-family="DejaVu Sans, Arial, sans-serif" font-size="13" font-weight="bold" fill="${style.accent}">CAT MEME  •  #${cardNum}</text>
+  <text x="392" y="376" font-family="DejaVu Sans, Arial, sans-serif" font-size="13" fill="#94a3b8" text-anchor="end">Recycle: ${card.recycle_value} tuna</text>
 
   <rect x="24" y="390" width="372" height="122" rx="10" fill="#1e293b" stroke="#334155" stroke-width="1.5"/>
-  <text x="38" y="418" font-family="Arial, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">Skill: ${escapeXml(card.skill_name)}</text>
-  <text x="38" y="444" font-family="Arial, sans-serif" font-size="13" fill="#cbd5e1">${escapeXml(skillLines[0] || '')}</text>
-  <text x="38" y="464" font-family="Arial, sans-serif" font-size="13" fill="#cbd5e1">${escapeXml(skillLines[1] || '')}</text>
+  <text x="38" y="418" font-family="DejaVu Sans, Arial, sans-serif" font-size="15" font-weight="bold" fill="#f8fafc">Skill: ${escapeXml(card.skill_name)}</text>
+  <text x="38" y="444" font-family="DejaVu Sans, Arial, sans-serif" font-size="13" fill="#cbd5e1">${escapeXml(skillLines[0] || '')}</text>
+  <text x="38" y="464" font-family="DejaVu Sans, Arial, sans-serif" font-size="13" fill="#cbd5e1">${escapeXml(skillLines[1] || '')}</text>
   <line x1="38" y1="482" x2="382" y2="482" stroke="#334155" stroke-width="1"/>
-  <text x="38" y="502" font-family="Arial, sans-serif" font-size="12" font-style="italic" fill="#94a3b8">"${escapeXml(card.flavor_text)}"</text>
+  <text x="38" y="502" font-family="DejaVu Sans, Arial, sans-serif" font-size="12" font-style="italic" fill="#94a3b8">"${escapeXml(card.flavor_text)}"</text>
 
   <rect x="24" y="526" width="178" height="46" rx="10" fill="#1e293b" stroke="${style.border1}" stroke-width="1.5"/>
-  <text x="113" y="555" font-family="Arial, sans-serif" font-size="17" font-weight="bold" fill="${style.accent}" text-anchor="middle">ATK  ${card.atk}</text>
+  <text x="113" y="555" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="bold" fill="${style.accent}" text-anchor="middle">ATK  ${card.atk}</text>
 
   <rect x="218" y="526" width="178" height="46" rx="10" fill="#1e293b" stroke="#38bdf8" stroke-width="1.5"/>
-  <text x="307" y="555" font-family="Arial, sans-serif" font-size="17" font-weight="bold" fill="#7dd3fc" text-anchor="middle">SLEEP  ${card.sleep}</text>
+  <text x="307" y="555" font-family="DejaVu Sans, Arial, sans-serif" font-size="17" font-weight="bold" fill="#7dd3fc" text-anchor="middle">SLEEP  ${card.sleep}</text>
 </svg>`;
 
         const artBuffer = await this.downloadArtBuffer(card.image_url);
@@ -205,10 +233,10 @@ class TcgCardRenderer {
         if (artBuffer) {
             return await base
                 .composite([{ input: artBuffer, left: 24, top: 80 }])
-                .png()
+                .jpeg({ quality: 92 })
                 .toBuffer();
         }
-        return await base.png().toBuffer();
+        return await base.jpeg({ quality: 92 }).toBuffer();
     }
 }
 

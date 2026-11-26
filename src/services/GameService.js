@@ -16,24 +16,24 @@ const RARITY_TABLE = [
 
 const CARD_TEMPLATES = {
     SS: [
-        { name: 'Milo Raja Tidur', skill: 'Tidur Abadi', desc: 'Cuek maksimal. Bangun cuma pas denger kaleng tuna.', flavor: 'Tidur. Jangan ganggu.' },
-        { name: 'Tutu Bayangan', skill: 'Mode Ninja Hitam', desc: 'Hilang di ruangan gelap. Cuma kelihatan mata kuning.', flavor: 'Gelap. Gak kelihatan.' }
+        { name: 'Milo Raja Tidur', tag: 'sleepy', skill: 'Tidur Abadi', desc: 'Cuek maksimal. Bangun cuma pas denger kaleng tuna.', flavor: 'Tidur. Jangan ganggu.' },
+        { name: 'Tutu Bayangan', tag: 'black', skill: 'Mode Ninja Hitam', desc: 'Hilang di ruangan gelap. Cuma kelihatan mata kuning.', flavor: 'Gelap. Gak kelihatan.' }
     ],
     S: [
-        { name: 'Kuki Ragdoll', skill: 'Tatapan Polos', desc: 'Duduk manis di depan mangkok kosong sampai dikasih makan.', flavor: 'Lapar. Mangkok kosong.' },
-        { name: 'Milo Tabby Bos', skill: 'Audit Struk', desc: 'Lirik struk belanjaan sambil nge-judge pengeluaran.', flavor: 'Boros. Kurangin jajan.' }
+        { name: 'Kuki Ragdoll', tag: 'fluffy', skill: 'Tatapan Polos', desc: 'Duduk manis di depan mangkok kosong sampai dikasih makan.', flavor: 'Lapar. Mangkok kosong.' },
+        { name: 'Milo Tabby Bos', tag: 'tabby', skill: 'Audit Struk', desc: 'Lirik struk belanjaan sambil nge-judge pengeluaran.', flavor: 'Boros. Kurangin jajan.' }
     ],
     A: [
-        { name: 'Kucing Polite', skill: 'Senyum Sopan', desc: 'Nolak halus tapi tetap ambil makanan di meja.', flavor: 'Permisi. Ambil tuna.' },
-        { name: 'Kucing Zoomies', skill: 'Lari Jam 3 Pagi', desc: 'Sprint keliling rumah tanpa alasan jelas.', flavor: 'Lari. Nabrak tembok.' }
+        { name: 'Kucing Polite', tag: 'cute', skill: 'Senyum Sopan', desc: 'Nolak halus tapi tetap ambil makanan di meja.', flavor: 'Permisi. Ambil tuna.' },
+        { name: 'Kucing Zoomies', tag: 'jump', skill: 'Lari Jam 3 Pagi', desc: 'Sprint keliling rumah tanpa alasan jelas.', flavor: 'Lari. Nabrak tembok.' }
     ],
     B: [
-        { name: 'Huh Cat', skill: 'Hah Mode', desc: 'Muter kepala pas ditanya siapa yang numpahin air.', flavor: 'Hah. Bukan aku.' },
-        { name: 'Kucing Marah', skill: 'Cakar Sofa', desc: 'Ngegas kalau pintu kamar ditutup.', flavor: 'Buka. Sekarang.' }
+        { name: 'Huh Cat', tag: 'confused', skill: 'Hah Mode', desc: 'Muter kepala pas ditanya siapa yang numpahin air.', flavor: 'Hah. Bukan aku.' },
+        { name: 'Kucing Marah', tag: 'angry', skill: 'Cakar Sofa', desc: 'Ngegas kalau pintu kamar ditutup.', flavor: 'Buka. Sekarang.' }
     ],
     C: [
-        { name: 'Kucing Nangis', skill: 'Meow Sedih', desc: 'Muka melas minta nambah jatah makan malam.', flavor: 'Sedih. Minta tuna.' },
-        { name: 'Kucing Rebahan', skill: 'Nempel Lantai', desc: 'Gak mau gerak seharian di tengah ruang tamu.', flavor: 'Males. Geser sana.' }
+        { name: 'Kucing Nangis', tag: 'sad', skill: 'Meow Sedih', desc: 'Muka melas minta nambah jatah makan malam.', flavor: 'Sedih. Minta tuna.' },
+        { name: 'Kucing Rebahan', tag: 'sleeping', skill: 'Nempel Lantai', desc: 'Gak mau gerak seharian di tengah ruang tamu.', flavor: 'Males. Geser sana.' }
     ]
 };
 
@@ -136,10 +136,14 @@ class GameService {
         const pool = CARD_TEMPLATES[tier.rarity] || CARD_TEMPLATES.C;
         const tpl = pool[Math.floor(Math.random() * pool.length)];
         const excludedUrls = await tcgRepo.getImageUrlsUsedByOtherRarities(tier.rarity);
-        const meme = await cardRenderer.fetchRandomCatMeme(tier.rarity, excludedUrls);
+        const meme = await cardRenderer.fetchRandomCatMeme(tier.rarity, excludedUrls, tpl.tag);
+
+        const cardName = meme.fromReddit && meme.title
+            ? meme.title.slice(0, 24).trim()
+            : tpl.name;
 
         const cardData = {
-            name: tpl.name,
+            name: cardName,
             rarity: tier.rarity,
             image_url: meme.url,
             skill_name: tpl.skill,
@@ -154,7 +158,7 @@ class GameService {
         const { userCardId } = await tcgRepo.createCardAndAssign(userId, cardData);
         const pngBuffer = await cardRenderer.renderCardPng({ ...cardData, user_card_id: userCardId });
 
-        const attachment = new AttachmentBuilder(pngBuffer, { name: `milo-card-${userCardId}.png` });
+        const attachment = new AttachmentBuilder(pngBuffer, { name: `milo-card-${userCardId}.jpg` });
         return {
             content: `Dapet **#${userCardId} ${cardData.name}** [${cardData.rarity}]. Sisa saldo: **${updated.tuna} tuna**.`,
             files: [attachment]
@@ -181,7 +185,7 @@ class GameService {
         if (!card) return `Kartu #${id} gak ketemu di koleksimu.`;
 
         const pngBuffer = await cardRenderer.renderCardPng(card);
-        const attachment = new AttachmentBuilder(pngBuffer, { name: `milo-card-${id}.png` });
+        const attachment = new AttachmentBuilder(pngBuffer, { name: `milo-card-${id}.jpg` });
         return {
             content: `Kartu **#${id} ${card.name}** [${card.rarity}]`,
             files: [attachment]
