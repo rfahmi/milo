@@ -225,6 +225,11 @@ class GeminiService {
         let retryCount = 0;
         let delay = 2000; // Start with 2 seconds
 
+        const isExplicitlyAddressed = Boolean(meta.isMentioningMilo || meta.isReplyToMilo || meta.addressedByName);
+        const failReply = (msg) => isExplicitlyAddressed
+            ? { intent: 'CHAT', response: msg }
+            : { intent: 'IGNORE', response: null };
+
         while (retryCount <= maxRetries) {
             try {
                 const resp = await fetch(url, {
@@ -243,7 +248,7 @@ class GeminiService {
 
                 if (!resp.ok) {
                     console.error('Gemini API error (analyzeText):', resp.status);
-                    return { intent: 'CHAT', response: 'Otak error.' };
+                    return failReply('Otak error.');
                 }
 
                 const json = await resp.json();
@@ -255,16 +260,18 @@ class GeminiService {
                     return JSON.parse(rawText);
                 } catch (e) {
                     console.error('Failed to parse JSON from Gemini:', rawText);
-                    return { intent: 'CHAT', response: rawText || 'Hah.' };
+                    return isExplicitlyAddressed
+                        ? { intent: 'CHAT', response: rawText || 'Hah.' }
+                        : { intent: 'IGNORE', response: null };
                 }
 
             } catch (e) {
                 console.error('analyzeText exception:', e);
-                return { intent: 'CHAT', response: 'Pusing.' };
+                return failReply('Pusing.');
             }
         }
 
-        return { intent: 'CHAT', response: 'Rame. Otak ngebul. Bentar.' };
+        return failReply('Rame. Otak ngebul. Bentar.');
     }
 
     async searchWeb(query) {

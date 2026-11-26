@@ -226,9 +226,15 @@ class ReceiptService {
             }
         }
 
-        // 2. Analyze text with Gemini (decides RECEIPT / ACTION / CHAT / IGNORE from context & history)
+        // 2. Skip messages obviously addressed to Ose (e.g. "Se", "Ose", "Se lagi dimana") to save Gemini quota
         const isReceiptChannel = meta.isReceiptChannel !== false;
         const addressedByName = /\bmilo\b/i.test(msg.content);
+        const addressesMilo = meta.isMentioningMilo || meta.isReplyToMilo || addressedByName;
+        if (!addressesMilo && /\b(ose|se)\b/i.test(msg.content)) {
+            return null;
+        }
+
+        // 3. Analyze text with Gemini (decides RECEIPT / ACTION / CHAT / IGNORE from context & history)
         const analysis = await geminiService.analyzeText(msg.content, history, {
             ...meta,
             addressedByName
