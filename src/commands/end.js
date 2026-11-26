@@ -1,5 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const receiptService = require('../services/ReceiptService');
+const { sendLongReply } = require('../utils/discordReply');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -8,6 +9,6 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply();
         const result = await receiptService.endCheckpoint(interaction.channelId, interaction.id);
-        await interaction.editReply(result.message);
+        await sendLongReply(interaction, result.message);
     },
 };

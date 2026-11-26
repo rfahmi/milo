@@ -93,21 +93,16 @@ module.exports = {
     gemini: {
         receiptExtraction:
             'You are reading a shopping receipt or bank/QRIS transfer slip (usually Indonesian, IDR/Rp).\n' +
-            'If this is NOT a receipt or you cannot find a clear total amount, respond with exactly: NOT_A_RECEIPT\n\n' +
-            'If this IS a receipt, extract ONLY the grand total amount paid.\n' +
+            'If this is NOT a receipt or you cannot find a clear total amount, respond with JSON: {"is_receipt": false}\n\n' +
+            'If this IS a receipt, extract ONLY the grand total amount paid and a short merchant/store name (2-4 words max, e.g. "Yoshinoya", "Indomaret", "GrabFood", or null if unclear).\n' +
             'PAY CLOSE ATTENTION TO NUMBER DELIMITERS AND REGIONAL FORMATS:\n' +
             '- Indonesian/EU format uses "." for thousands and "," for decimals (e.g. "Rp 148.000,00" or "Rp 148.000,-" -> 148000).\n' +
             '- US/International/Bank-app format (like BCA, Mandiri, QRIS) uses "," for thousands and "." for decimals (e.g. "IDR 148,000.00" -> 148000).\n' +
             '- Trailing ".00" or ",00" after a 3-digit thousand group is cents/sen, NOT extra zeros on the Rupiah amount. Drop the decimal/cents part.\n' +
             '- Ignore non-monetary numbers such as reference numbers, RRN, terminal IDs, PAN/account numbers, dates, or phone numbers.\n' +
             '- If there are multiple monetary amounts (subtotal, tax, discount, total), return ONLY the final grand total paid.\n\n' +
-            'Output ONLY the plain integer Rupiah amount with no currency, no dots, no commas, and no extra text.\n' +
-            'Examples:\n' +
-            '- "IDR 148,000.00" -> 148000\n' +
-            '- "Rp 148.000,00" -> 148000\n' +
-            '- "Rp 125.000" -> 125000\n' +
-            '- "IDR 1,250,000.00" -> 1250000\n' +
-            'If not a receipt or unclear, return: NOT_A_RECEIPT',
+            'Output JSON ONLY (no markdown, no extra text):\n' +
+            '{"is_receipt": true, "amount": 148000, "merchant": "Yoshinoya"}',
 
         sassyComment:
             `Kamu Milo. Kucing Persia tabby jantan. Kakak dari Kuki (ragdoll putih). Majikan: Fahmi (cowok) & Ose (cewek).

@@ -89,12 +89,34 @@ class GeminiService {
                     throw new Error('Image is not a valid receipt');
                 }
 
-                const amount = this.parseAmount(text);
+                let amount = null;
+                let description = null;
+                const jsonText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+                try {
+                    const parsed = JSON.parse(jsonText);
+                    if (parsed && parsed.is_receipt === false) {
+                        throw new Error('Image is not a valid receipt');
+                    }
+                    if (parsed && parsed.amount !== undefined && parsed.amount !== null) {
+                        amount = typeof parsed.amount === 'number'
+                            ? Math.round(parsed.amount)
+                            : this.parseAmount(String(parsed.amount));
+                        description = typeof parsed.merchant === 'string' && parsed.merchant.trim()
+                            ? parsed.merchant.trim()
+                            : null;
+                    }
+                } catch (parseErr) {
+                    if (parseErr.message === 'Image is not a valid receipt') throw parseErr;
+                    // Fallback to plain-text amount parsing if Gemini didn't return JSON
+                    amount = this.parseAmount(text);
+                }
+
                 if (amount !== null) {
                     if (amount < 100 || amount > 100000000) {
                         throw new Error(`Extracted amount seems unreasonable: ${amount}. Original text: '${text}'`);
                     }
-                    return amount;
+                    return { amount, description };
                 }
 
                 throw new Error(`Could not parse total from Gemini response. Text: '${text}'`);

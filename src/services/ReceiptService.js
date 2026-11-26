@@ -68,36 +68,22 @@ class ReceiptService {
     }
 
     async undo(channelId) {
-        // Logic: Delete the LATEST checkpoint if it has NO receipts.
-        // However, the original PHP code said "Undoes the latest checkpoint if nothing happened after it".
-        // "nothing happened after it" implies no receipts were added.
         const latest = await receiptRepo.getLatestCheckpoint(channelId);
         if (!latest) {
             return { success: false, message: t.commands.undo.noCheckpoint() };
         }
 
-        // Check if it has receipts
-        const receipts = await receiptRepo.getReceiptsForCheckpoint(latest.id);
-        if (receipts.length > 0) {
-            return { success: false, message: 'Nggak bisa undo, udah ada struk yang masuk!' }; // Add translation later if needed
+        if (latest.closed_at) {
+            return { success: false, message: 'Checkpoint udah ditutup. Pake /unclose dulu.' };
         }
 
-        // Since we don't have a delete method in repo yet (and requirements say "No data should reset unless explicitly deleted"),
-        // but undo explicitly asks for deletion. Requirements: "No data should reset unless explicitly deleted." - Undo is explicit.
-        // I need to add deleteCheckpoint to repo or just "close" it as "void".
-        // For now, I'll assume we can just ignore it or delete it. The original code didn't implement undo in the helpers I saw?
-        // Wait, the README mentions /undo. The helpers.js didn't have deleteCheckpoint.
-        // Let's implement soft delete or just delete it if I can access DB.
-        // For now I'll implement a `deleteCheckpoint` in repo in next step or just use `run` here if I really had to (but I should use repo).
-        // I will add `deleteCheckpoint` to Repository.
+        const receipts = await receiptRepo.getReceiptsForCheckpoint(latest.id);
+        if (receipts.length > 0) {
+            return { success: false, message: 'Gak bisa undo, udah ada struk masuk.' };
+        }
 
-        // For now, I'll return a message saying it's not implemented yet or implement it properly.
-        // Let's modify Repository to add deleteCheckpoint.
-
-        // Actually, I'll leave undo for now or implement it if requested. The Plan included `undo.js`.
-        // Let's assume I will add `deleteCheckpoint` to repo.
-
-        return { success: false, message: 'Undo functionality pending repository update.' };
+        await receiptRepo.deleteCheckpoint(latest.id);
+        return { success: true, message: t.commands.undo.success(latest.id) };
     }
 
     async unclose(channelId) {
@@ -147,7 +133,7 @@ class ReceiptService {
         inFlightAttachments.add(att.id);
 
         try {
-            const amount = await geminiService.extractTotal(att.url);
+            const { amount, description } = await geminiService.extractTotal(att.url);
             const receiptId = await receiptRepo.addReceipt({
                 user_id: msg.author.id,
                 user_name: msg.member?.displayName || msg.author.username,
@@ -157,12 +143,14 @@ class ReceiptService {
                 attachment_id: att.id,
                 image_url: att.url,
                 amount: amount,
+                description: description,
                 created_at: new Date().toISOString()
             });
 
             if (receiptId) {
                 const orderNumber = await receiptRepo.getReceiptCountForCheckpoint(active.id);
-                return t.receipts.acknowledged(active.id, orderNumber, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID'));
+                const ack = t.receipts.acknowledged(active.id, orderNumber, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID'));
+                return description ? `${ack} (${description})` : ack;
             }
         } catch (e) {
             console.log(`Not a receipt (${att.url}): ${e.message}`);
@@ -177,37 +165,47 @@ class ReceiptService {
     async processText(msg, channelId, history, meta = {}) {
         const conversationRepo = require('../data/repositories/ConversationRepository');
 
-        // 1. Check for active state (e.g., waiting for description)
+        // 1. Check for active state (e.g., waiting for description), with 10-min TTL
+        const STATE_TTL_MS = 10 * 60 * 1000;
         const activeState = await conversationRepo.getState(msg.author.id, channelId);
 
         if (activeState && activeState.state === 'WAITING_FOR_DESCRIPTION' && activeState.data.amount) {
-            // User provided description for a pending amount
-            const amount = activeState.data.amount;
-            const description = msg.content;
-
-            // Check for active checkpoint
-            const activeCheckpoint = await receiptRepo.getActiveCheckpoint(channelId);
-            if (!activeCheckpoint) {
+            const ageMs = activeState.updated_at ? (Date.now() - new Date(activeState.updated_at).getTime()) : Infinity;
+            if (ageMs > STATE_TTL_MS) {
                 await conversationRepo.clearState(msg.author.id, channelId);
-                return t.commands.start.alreadyActive(0).replace('0', '?'); // Fallback explanation
+            } else if (/^(batal|cancel|gak jadi|ga jadi|nggak jadi|skip)$/i.test(msg.content.trim())) {
+                await conversationRepo.clearState(msg.author.id, channelId);
+                return 'Batal.';
+            } else {
+                // User provided description for a pending amount
+                const amount = activeState.data.amount;
+                const description = msg.content;
+
+                // Check for active checkpoint
+                const activeCheckpoint = await receiptRepo.getActiveCheckpoint(channelId);
+                if (!activeCheckpoint) {
+                    await conversationRepo.clearState(msg.author.id, channelId);
+                    return t.commands.start.alreadyActive(0).replace('0', '?'); // Fallback explanation
+                }
+
+                // Add receipt
+                const receiptId = await receiptRepo.addReceipt({
+                    user_id: msg.author.id,
+                    user_name: msg.member?.displayName || msg.author.username,
+                    channel_id: channelId,
+                    checkpoint_id: activeCheckpoint.id,
+                    message_id: msg.id,
+                    image_url: null, // No image
+                    amount: amount,
+                    description: description,
+                    created_at: new Date().toISOString()
+                });
+
+                await conversationRepo.clearState(msg.author.id, channelId);
+
+                const orderNumber = await receiptRepo.getReceiptCountForCheckpoint(activeCheckpoint.id);
+                return t.receipts.acknowledged(activeCheckpoint.id, orderNumber, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID')) + ` (${description})`;
             }
-
-            // Add receipt
-            const receiptId = await receiptRepo.addReceipt({
-                user_id: msg.author.id,
-                user_name: msg.member?.displayName || msg.author.username,
-                channel_id: channelId,
-                checkpoint_id: activeCheckpoint.id,
-                message_id: msg.id,
-                image_url: null, // No image
-                amount: amount,
-                created_at: new Date().toISOString()
-            });
-
-            await conversationRepo.clearState(msg.author.id, channelId);
-
-            const orderNumber = await receiptRepo.getReceiptCountForCheckpoint(activeCheckpoint.id);
-            return t.receipts.acknowledged(activeCheckpoint.id, orderNumber, msg.member?.displayName || msg.author.username, amount.toLocaleString('id-ID')) + ` (${description})`;
         }
 
         // 2. No active state, analyze text
@@ -258,6 +256,7 @@ class ReceiptService {
                     message_id: msg.id,
                     image_url: null,
                     amount: analysis.amount,
+                    description: analysis.item,
                     created_at: new Date().toISOString()
                 });
 
