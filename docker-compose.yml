@@ -1,0 +1,12 @@
+services:
+  milo:
+    build: .
+    container_name: milo
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data
+      - ./data:/usr/src/app/data
+    ports:
+      - "38472:38472"
