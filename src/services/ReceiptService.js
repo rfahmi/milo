@@ -227,8 +227,10 @@ class ReceiptService {
         }
 
         // 2. Fast pre-filter: ignore casual group chat not directed at Milo and without numbers
+        // Outside the receipt channel, only respond when explicitly addressing Milo.
+        const isReceiptChannel = meta.isReceiptChannel !== false;
         const addressesMilo = meta.isMentioningMilo || meta.isReplyToMilo || /\bmilo\b/i.test(msg.content);
-        const mightBeReceipt = /\d/.test(msg.content);
+        const mightBeReceipt = isReceiptChannel && /\d/.test(msg.content);
         if (!addressesMilo && !mightBeReceipt) {
             return null;
         }
@@ -254,7 +256,7 @@ class ReceiptService {
         }
 
         if (analysis.intent === 'ACTION' && analysis.action) {
-            return await this.handleAction(analysis.action, analysis.params || {}, msg, channelId, conversationRepo);
+            return await this.handleAction(analysis.action, analysis.params || {}, msg, channelId, conversationRepo, isReceiptChannel);
         }
 
         if (analysis.intent === 'CHAT') {
@@ -262,6 +264,11 @@ class ReceiptService {
         }
 
         if (analysis.intent === 'RECEIPT') {
+            if (!isReceiptChannel) {
+                return config.discord.channelId
+                    ? `Catat struk cuma di <#${config.discord.channelId}>.`
+                    : 'Catat struk cuma di channel struk.';
+            }
             const activeCheckpoint = await receiptRepo.getActiveCheckpoint(channelId);
             if (!activeCheckpoint) {
                 return "Belum ada checkpoint jalan. /start dulu.";
@@ -310,7 +317,7 @@ class ReceiptService {
         return null;
     }
 
-    async handleAction(action, params, msg, channelId, conversationRepo) {
+    async handleAction(action, params, msg, channelId, conversationRepo, isReceiptChannel = true) {
         if (action === 'LIST_CHECKPOINTS') {
             const rows = await receiptRepo.getAllCheckpointsWithCounts();
             if (rows.length === 0) return 'DB kosong. Gak ada checkpoint.';
@@ -403,6 +410,14 @@ class ReceiptService {
             const question = (params.question || msg.content || '').trim();
             if (!question) return 'Tanya apa. Sebut yang jelas.';
             return await geminiService.queryDatabaseWithNL(question);
+        }
+
+        // Receipt/checkpoint CRUD is restricted to the receipt channel
+        const receiptCrudActions = ['DELETE_INACTIVE_CHECKPOINTS', 'DELETE_CHECKPOINT', 'DELETE_RECEIPT'];
+        if (!isReceiptChannel && receiptCrudActions.includes(action)) {
+            return config.discord.channelId
+                ? `Hapus struk/checkpoint cuma di <#${config.discord.channelId}>.`
+                : 'Hapus struk/checkpoint cuma di channel struk.';
         }
 
         // Destructive actions require admin authorization (when DISCORD_ADMIN_USER_ID is configured)

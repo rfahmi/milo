@@ -259,11 +259,7 @@ class DiscordClient {
 
             if (message.author.bot) return;
 
-            // Check channel ID mismatch with logging
-            if (config.discord.channelId && message.channelId !== config.discord.channelId) {
-                // console.log(`[DEBUG] Ignoring message from channel ${message.channelId} (Expected: ${config.discord.channelId})`);
-                return;
-            }
+            const isReceiptChannel = !config.discord.channelId || message.channelId === config.discord.channelId;
 
             if (message.attachments.size === 0) {
                 try {
@@ -295,7 +291,7 @@ class DiscordClient {
                         message,
                         message.channelId,
                         historyArray,
-                        { authorName: displayName, botId, isMentioningMilo, isReplyToMilo, replyTarget }
+                        { authorName: displayName, botId, isMentioningMilo, isReplyToMilo, replyTarget, isReceiptChannel }
                     );
 
                     if (response) {
@@ -304,6 +300,11 @@ class DiscordClient {
                 } catch (error) {
                     console.error('[DEBUG] Error processing text:', error);
                 }
+                return;
+            }
+
+            // Image attachments (receipts) are only processed in the configured receipt channel
+            if (!isReceiptChannel) {
                 return;
             }
 
