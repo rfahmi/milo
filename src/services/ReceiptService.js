@@ -401,7 +401,7 @@ class ReceiptService {
             }
 
             const picked = pool.slice(0, count).map(o => `**${o}**`).join(', ');
-            return `🪙 ${picked}.`;
+            return `${picked}.`;
         }
 
         if (action === 'WEB_SEARCH') {
