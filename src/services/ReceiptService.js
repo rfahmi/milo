@@ -1,5 +1,6 @@
 const receiptRepo = require('../data/repositories/ReceiptRepository');
 const geminiService = require('./GeminiService');
+const config = require('../config');
 const t = require('../utils/translations');
 
 // In-flight guard: tracks attachment IDs currently being processed.
@@ -208,11 +209,31 @@ class ReceiptService {
             }
         }
 
+        // 1b. Check for pending destructive action confirmation (5-min TTL)
+        const CONFIRM_TTL_MS = 5 * 60 * 1000;
+        if (activeState && activeState.state === 'WAITING_FOR_ACTION_CONFIRM' && activeState.data.action) {
+            const ageMs = activeState.updated_at ? (Date.now() - new Date(activeState.updated_at).getTime()) : Infinity;
+            const trimmed = msg.content.trim();
+            if (ageMs > CONFIRM_TTL_MS) {
+                await conversationRepo.clearState(msg.author.id, channelId);
+            } else if (/^(ya|yes|iya|confirm|lanjut|oke|ok|gas)$/i.test(trimmed)) {
+                await conversationRepo.clearState(msg.author.id, channelId);
+                return await this.executeConfirmedAction(activeState.data.action, activeState.data.params || {}, channelId);
+            } else if (/^(batal|no|tidak|cancel|gak jadi|ga jadi|nggak jadi)$/i.test(trimmed)) {
+                await conversationRepo.clearState(msg.author.id, channelId);
+                return 'Batal.';
+            }
+        }
+
         // 2. No active state, analyze text
         const analysis = await geminiService.analyzeText(msg.content, history, meta);
 
         if (analysis.intent === 'IGNORE') {
             return null;
+        }
+
+        if (analysis.intent === 'ACTION' && analysis.action) {
+            return await this.handleAction(analysis.action, analysis.params || {}, msg, channelId, conversationRepo);
         }
 
         if (analysis.intent === 'CHAT') {
@@ -266,6 +287,129 @@ class ReceiptService {
         }
 
         return null;
+    }
+
+    async handleAction(action, params, msg, channelId, conversationRepo) {
+        if (action === 'LIST_CHECKPOINTS') {
+            const rows = await receiptRepo.getAllCheckpointsWithCounts();
+            if (rows.length === 0) return 'DB kosong. Gak ada checkpoint.';
+            const activeCount = rows.filter(r => !r.closed_at).length;
+            const closedCount = rows.length - activeCount;
+            const lines = rows.map(r =>
+                `- #${r.id}: ${r.closed_at ? 'tutup' : 'aktif'}, ${r.receipt_count} struk (Rp${Number(r.total_amount).toLocaleString('id-ID')})`
+            );
+            return `Total: ${rows.length} checkpoint (${activeCount} aktif, ${closedCount} tutup).\n${lines.join('\n')}`;
+        }
+
+        if (action === 'CHECKPOINT_STATUS') {
+            const active = await receiptRepo.getActiveCheckpoint(channelId);
+            if (!active) return 'Gak ada checkpoint aktif.';
+            const receipts = await receiptRepo.getReceiptsForCheckpoint(active.id);
+            const total = receipts.reduce((sum, r) => sum + r.amount, 0);
+            return `Checkpoint #${active.id} aktif. ${receipts.length} struk. Total Rp${total.toLocaleString('id-ID')}.`;
+        }
+
+        // Destructive actions require admin authorization (when DISCORD_ADMIN_USER_ID is configured)
+        if (config.discord.adminId && msg.author.id !== config.discord.adminId) {
+            return 'Gak boleh. Bukan admin.';
+        }
+
+        if (action === 'DELETE_INACTIVE_CHECKPOINTS') {
+            const rows = await receiptRepo.getAllCheckpointsWithCounts();
+            const inactive = rows.filter(r => r.closed_at);
+            if (inactive.length === 0) return 'Kosong. Gak ada checkpoint non-aktif.';
+
+            const ids = inactive.map(r => `#${r.id}`).join(', ');
+            const totalReceipts = inactive.reduce((s, r) => s + r.receipt_count, 0);
+            const totalAmount = inactive.reduce((s, r) => s + Number(r.total_amount), 0);
+
+            await conversationRepo.setState(msg.author.id, channelId, 'WAITING_FOR_ACTION_CONFIRM', {
+                action,
+                params: {}
+            });
+
+            return `Konfirmasi hapus:\n- ${inactive.length} checkpoint non-aktif (${ids})\n- ${totalReceipts} struk ikut kehapus (Rp${totalAmount.toLocaleString('id-ID')})\nPermanen. Balas "ya" lanjut, "batal" batal.`;
+        }
+
+        if (action === 'DELETE_CHECKPOINT') {
+            const cpId = Number(params.checkpoint_id);
+            if (!cpId) return 'Sebut nomor checkpoint. Contoh: hapus checkpoint #2.';
+
+            const rows = await receiptRepo.getAllCheckpointsWithCounts();
+            const target = rows.find(r => r.id === cpId);
+            if (!target) return `Checkpoint #${cpId} gak ketemu.`;
+
+            await conversationRepo.setState(msg.author.id, channelId, 'WAITING_FOR_ACTION_CONFIRM', {
+                action,
+                params: { checkpoint_id: cpId }
+            });
+
+            return `Konfirmasi hapus:\n- Checkpoint #${cpId} (${target.closed_at ? 'tutup' : 'aktif'})\n- ${target.receipt_count} struk ikut kehapus (Rp${Number(target.total_amount).toLocaleString('id-ID')})\nPermanen. Balas "ya" lanjut, "batal" batal.`;
+        }
+
+        if (action === 'DELETE_RECEIPT') {
+            const num = Number(params.receipt_number);
+            if (!num) return 'Sebut nomor struk. Contoh: hapus struk #3.';
+
+            const active = await receiptRepo.getActiveCheckpoint(channelId);
+            if (!active || active.closed_at !== null) return 'Gak ada checkpoint aktif.';
+
+            const receipts = await receiptRepo.getReceiptsForCheckpoint(active.id);
+            const target = receipts[num - 1];
+            if (!target) return `Struk #${num} gak ketemu.`;
+
+            await conversationRepo.setState(msg.author.id, channelId, 'WAITING_FOR_ACTION_CONFIRM', {
+                action,
+                params: { receipt_number: num }
+            });
+
+            return `Konfirmasi hapus:\n- Struk #${num}: ${target.user_name} Rp${Number(target.amount).toLocaleString('id-ID')}${target.description ? ` (${target.description})` : ''}\n- Dari Checkpoint #${active.id}\nBalas "ya" lanjut, "batal" batal.`;
+        }
+
+        return 'Gak ngerti perintahnya.';
+    }
+
+    async deleteReceipt(channelId, receiptNumber) {
+        const activeCheckpoint = await receiptRepo.getActiveCheckpoint(channelId);
+        if (!activeCheckpoint) {
+            return { success: false, message: '❌ Tidak ada checkpoint yang aktif saat ini.' };
+        }
+        if (activeCheckpoint.closed_at !== null) {
+            return { success: false, message: '❌ Checkpoint sudah ditutup. Hanya bisa menghapus transaksi dari checkpoint yang sedang berjalan.' };
+        }
+
+        const deletedId = await receiptRepo.deleteReceiptByNumber(activeCheckpoint.id, receiptNumber);
+        if (!deletedId) {
+            return { success: false, message: `❌ Transaksi nomor ${receiptNumber} tidak ditemukan. Gunakan /status untuk melihat daftar transaksi.` };
+        }
+
+        return {
+            success: true,
+            checkpointId: activeCheckpoint.id,
+            deletedId,
+            message: `✅ Transaksi nomor ${receiptNumber} berhasil dihapus dari checkpoint #${activeCheckpoint.id}.`
+        };
+    }
+
+    async executeConfirmedAction(action, params, channelId) {
+        if (action === 'DELETE_INACTIVE_CHECKPOINTS') {
+            const { checkpointsDeleted, receiptsDeleted } = await receiptRepo.deleteInactiveCheckpoints();
+            return `Done. ${checkpointsDeleted} checkpoint non-aktif & ${receiptsDeleted} struk dihapus.`;
+        }
+
+        if (action === 'DELETE_CHECKPOINT') {
+            const { checkpointsDeleted, receiptsDeleted } = await receiptRepo.deleteCheckpointCascade(params.checkpoint_id);
+            if (checkpointsDeleted === 0) return `Checkpoint #${params.checkpoint_id} gak ketemu.`;
+            return `Done. Checkpoint #${params.checkpoint_id} & ${receiptsDeleted} struk dihapus.`;
+        }
+
+        if (action === 'DELETE_RECEIPT') {
+            const res = await this.deleteReceipt(channelId, params.receipt_number);
+            if (!res.success) return res.message.replace(/^❌\s*/, '');
+            return `Done. Struk #${params.receipt_number} dihapus dari Checkpoint #${res.checkpointId}.`;
+        }
+
+        return 'Batal. Aksi gak dikenal.';
     }
 
     formatSummary(summaryUsers, receipts) {

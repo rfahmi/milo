@@ -120,6 +120,46 @@ class ReceiptRepository {
         );
     }
 
+    async getAllCheckpointsWithCounts() {
+        return await db.all(
+            `SELECT c.id, c.channel_id, c.created_at, c.closed_at,
+                    COUNT(CASE WHEN r.deleted_at IS NULL THEN 1 END) AS receipt_count,
+                    COALESCE(SUM(CASE WHEN r.deleted_at IS NULL THEN r.amount ELSE 0 END), 0) AS total_amount
+             FROM checkpoints c
+             LEFT JOIN receipts r ON r.checkpoint_id = c.id
+             GROUP BY c.id
+             ORDER BY c.id ASC`
+        );
+    }
+
+    async deleteInactiveCheckpoints() {
+        const receiptsRes = await db.run(
+            'DELETE FROM receipts WHERE checkpoint_id IN (SELECT id FROM checkpoints WHERE closed_at IS NOT NULL)'
+        );
+        const cpRes = await db.run(
+            'DELETE FROM checkpoints WHERE closed_at IS NOT NULL'
+        );
+        return {
+            checkpointsDeleted: cpRes.changes || 0,
+            receiptsDeleted: receiptsRes.changes || 0
+        };
+    }
+
+    async deleteCheckpointCascade(checkpointId) {
+        const receiptsRes = await db.run(
+            'DELETE FROM receipts WHERE checkpoint_id = ?',
+            [checkpointId]
+        );
+        const cpRes = await db.run(
+            'DELETE FROM checkpoints WHERE id = ?',
+            [checkpointId]
+        );
+        return {
+            checkpointsDeleted: cpRes.changes || 0,
+            receiptsDeleted: receiptsRes.changes || 0
+        };
+    }
+
     async getChannelState(channelId) {
         return await db.get('SELECT * FROM channel_state WHERE channel_id = ?', [channelId]);
     }

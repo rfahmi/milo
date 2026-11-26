@@ -237,35 +237,9 @@ module.exports = {
 
             try {
                 const receiptNumber = interaction.options.getInteger('number');
-                const receiptRepo = require('../data/repositories/ReceiptRepository');
-
-                // Get the active checkpoint
-                const activeCheckpoint = await receiptRepo.getActiveCheckpoint(interaction.channelId);
-                if (!activeCheckpoint) {
-                    return await interaction.editReply({
-                        content: '❌ Tidak ada checkpoint yang aktif saat ini.'
-                    });
-                }
-
-                // Verify checkpoint is running (not closed)
-                if (activeCheckpoint.closed_at !== null) {
-                    return await interaction.editReply({
-                        content: '❌ Checkpoint sudah ditutup. Hanya bisa menghapus transaksi dari checkpoint yang sedang berjalan.'
-                    });
-                }
-
-                // Delete the receipt
-                const deletedId = await receiptRepo.deleteReceiptByNumber(activeCheckpoint.id, receiptNumber);
-
-                if (!deletedId) {
-                    return await interaction.editReply({
-                        content: `❌ Transaksi nomor ${receiptNumber} tidak ditemukan. Gunakan /status untuk melihat daftar transaksi.`
-                    });
-                }
-
-                await interaction.editReply({
-                    content: `✅ Transaksi nomor ${receiptNumber} berhasil dihapus dari checkpoint #${activeCheckpoint.id}.`
-                });
+                const receiptService = require('../services/ReceiptService');
+                const result = await receiptService.deleteReceipt(interaction.channelId, receiptNumber);
+                await interaction.editReply({ content: result.message });
             } catch (error) {
                 console.error('Delete transaction failed:', error);
                 await interaction.editReply({ content: `❌ Failed: ${error.message}` });

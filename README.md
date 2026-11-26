@@ -32,16 +32,58 @@ Milo is a tiny Discord bot to help you and your family track shared expenses fro
 
 ## Setup & Deployment
 
-1. **Clone the repo**
-2. **Configure `.env`** (see `.env.example`)
-   - `DISCORD_BOT_TOKEN`: Your Bot Token
-   - `GEMINI_API_KEY`: Your Google Gemini API Key
-3. **Run with Docker**
-   ```bash
-   docker build -t milo .
-   docker run -v $(pwd)/data:/data -p 8080:8080 --env-file .env milo
-   ```
-   *Note: Port 8080 is exposed for the health check endpoint, but the bot works primarily via WebSocket Gateway.*
+### 1. Clone & Configure `.env`
+
+```bash
+git clone <repo-url> milo
+cd milo
+cp .env.example .env
+```
+
+Fill in `.env`:
+- `DISCORD_BOT_TOKEN`: Your Discord Bot Token
+- `DISCORD_APPLICATION_ID`: Your Discord Application ID
+- `DISCORD_GUILD_ID`: Your server ID (for instant guild slash commands and automatic cleanup of duplicate global commands)
+- `DISCORD_CHANNEL_ID`: Target channel ID for receipts
+- `DISCORD_ADMIN_USER_ID`: Your Discord user ID (for `/admin` commands)
+- `GEMINI_API_KEY`: Your Google Gemini API Key
+- `GEMINI_MODEL`: Optional (defaults to `gemini-1.5-flash`)
+- `DB_PATH`: Optional (defaults to `/data/receipts.db` in Docker)
+
+### 2. Deploy with Docker Compose (Recommended)
+
+`Dockerfile` runs as `USER node` (UID `1000`), so create the host `data/` directory with `1000:1000` ownership before starting:
+
+```bash
+mkdir -p data
+chown -R 1000:1000 data
+docker compose up -d --build
+```
+
+Check logs:
+
+```bash
+docker compose logs -f --tail=50
+```
+
+#### Updating on VPS
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+*(Recommended: run `/admin backup-schedule 0 3 * * *` in Discord to post a daily 3 AM Jakarta `.db` backup to your channel.)*
+
+### 3. Run with Plain Docker
+
+```bash
+mkdir -p data && chown -R 1000:1000 data
+docker build -t milo .
+docker run -d --name milo --restart unless-stopped -v $(pwd)/data:/data -v $(pwd)/data:/usr/src/app/data -p 38472:8080 --env-file .env milo
+```
+
+*Note: Port 8080 inside the container serves the health check endpoint (`/` and `/health`), while the bot runs over Discord Gateway.*
 
 ## Local Development
 
