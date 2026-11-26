@@ -2,6 +2,7 @@ const fetch = require('node-fetch');
 const sharp = require('sharp');
 const config = require('../config');
 const t = require('../utils/translations');
+const memoryRepo = require('../data/repositories/MemoryRepository');
 
 class GeminiService {
     constructor() {
@@ -202,7 +203,15 @@ class GeminiService {
             meta.replyTarget ? `Replying to message -> ${meta.replyTarget}` : null
         ].filter(Boolean).join('\n');
 
-        const prompt = `${t.gemini.textAnalysis}\n\nChat History:\n${context || '(empty)'}\n\nCurrent Message Context:\n${contextFlags}\nCurrent Input: ${text}`;
+        let memoryBlock = '(none)';
+        try {
+            const memories = await memoryRepo.getRecentMemories(40);
+            memoryBlock = memoryRepo.formatForPrompt(memories);
+        } catch (e) {
+            console.warn('[GeminiService] Could not load memories:', e.message);
+        }
+
+        const prompt = `${t.gemini.textAnalysis}\n\nSaved Memories & Rules:\n${memoryBlock}\n\nChat History:\n${context || '(empty)'}\n\nCurrent Message Context:\n${contextFlags}\nCurrent Input: ${text}`;
 
         const payload = {
             contents: [{

@@ -1,4 +1,5 @@
 const receiptRepo = require('../data/repositories/ReceiptRepository');
+const memoryRepo = require('../data/repositories/MemoryRepository');
 const geminiService = require('./GeminiService');
 const config = require('../config');
 const t = require('../utils/translations');
@@ -225,11 +226,31 @@ class ReceiptService {
             }
         }
 
-        // 2. No active state, analyze text
+        // 2. Fast pre-filter: ignore casual group chat not directed at Milo and without numbers
+        const addressesMilo = meta.isMentioningMilo || meta.isReplyToMilo || /\bmilo\b/i.test(msg.content);
+        const mightBeReceipt = /\d/.test(msg.content);
+        if (!addressesMilo && !mightBeReceipt) {
+            return null;
+        }
+
+        // 3. Analyze text with Gemini
         const analysis = await geminiService.analyzeText(msg.content, history, meta);
 
         if (analysis.intent === 'IGNORE') {
             return null;
+        }
+
+        if (analysis.auto_memory && analysis.auto_memory.content) {
+            try {
+                await memoryRepo.addMemory({
+                    scope: 'global',
+                    kind: analysis.auto_memory.kind || 'fact',
+                    content: analysis.auto_memory.content,
+                    createdBy: msg.author.id
+                });
+            } catch (e) {
+                console.warn('[ReceiptService] Failed to save auto_memory:', e.message);
+            }
         }
 
         if (analysis.intent === 'ACTION' && analysis.action) {
@@ -307,6 +328,49 @@ class ReceiptService {
             const receipts = await receiptRepo.getReceiptsForCheckpoint(active.id);
             const total = receipts.reduce((sum, r) => sum + r.amount, 0);
             return `Checkpoint #${active.id} aktif. ${receipts.length} struk. Total Rp${total.toLocaleString('id-ID')}.`;
+        }
+
+        if (action === 'LIST_MEMORIES') {
+            const memories = await memoryRepo.getRecentMemories(40);
+            if (memories.length === 0) return 'Kosong. Belum ada yang aku inget.';
+            const lines = memories.map(m => `- #${m.id} [${m.kind}] ${m.content}`);
+            return `Yang aku inget (${memories.length}):\n${lines.join('\n')}`;
+        }
+
+        if (action === 'REMEMBER') {
+            const content = (params.content || '').trim();
+            if (!content) return 'Inget apa. Sebut yang jelas.';
+            const kind = ['fact', 'preference', 'rule'].includes(params.kind) ? params.kind : 'fact';
+            const saved = await memoryRepo.addMemory({
+                scope: 'global',
+                kind,
+                content,
+                createdBy: msg.author.id
+            });
+            return saved?.deduplicated
+                ? `Udah inget (#${saved.id}): "${content}".`
+                : `Oke. Inget (#${saved.id} | ${kind}): "${content}".`;
+        }
+
+        if (action === 'FORGET_MEMORY') {
+            let matches = [];
+            if (params.memory_id) {
+                const one = await memoryRepo.getMemoryById(Number(params.memory_id));
+                if (one) matches = [one];
+            } else if (params.query) {
+                matches = await memoryRepo.findMemories(params.query);
+            }
+
+            if (matches.length === 0) return 'Gak nemu ingatan itu.';
+
+            await conversationRepo.setState(msg.author.id, channelId, 'WAITING_FOR_ACTION_CONFIRM', {
+                action,
+                params: params.memory_id ? { memory_id: Number(params.memory_id) } : { query: params.query }
+            });
+
+            const preview = matches.slice(0, 5).map(m => `- #${m.id} [${m.kind}] ${m.content}`).join('\n');
+            const more = matches.length > 5 ? `\n...dan ${matches.length - 5} lagi` : '';
+            return `Konfirmasi lupa (${matches.length} ingatan):\n${preview}${more}\nPermanen. Balas "ya" lanjut, "batal" batal.`;
         }
 
         // Destructive actions require admin authorization (when DISCORD_ADMIN_USER_ID is configured)
@@ -407,6 +471,17 @@ class ReceiptService {
             const res = await this.deleteReceipt(channelId, params.receipt_number);
             if (!res.success) return res.message.replace(/^❌\s*/, '');
             return `Done. Struk #${params.receipt_number} dihapus dari Checkpoint #${res.checkpointId}.`;
+        }
+
+        if (action === 'FORGET_MEMORY') {
+            let deleted = 0;
+            if (params.memory_id) {
+                deleted = await memoryRepo.deleteMemoryById(Number(params.memory_id));
+            } else if (params.query) {
+                deleted = await memoryRepo.deleteMemoriesByQuery(params.query);
+            }
+            if (deleted === 0) return 'Gak nemu ingatan itu.';
+            return `Done. ${deleted} ingatan dilupain.`;
         }
 
         return 'Batal. Aksi gak dikenal.';

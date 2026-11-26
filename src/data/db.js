@@ -153,6 +153,18 @@ function initSchema() {
       )
     `);
 
+        db.run(`
+      CREATE TABLE IF NOT EXISTS memories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope TEXT NOT NULL DEFAULT 'global',
+        kind TEXT NOT NULL DEFAULT 'fact',
+        content TEXT NOT NULL,
+        created_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
         // Create indexes for performance
         db.run(`
       CREATE INDEX IF NOT EXISTS idx_receipts_message_id 
